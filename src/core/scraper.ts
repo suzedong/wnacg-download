@@ -1,0 +1,448 @@
+import { chromium, Browser, Page } from 'playwright';
+import * as cheerio from 'cheerio';
+import { Comic, SearchOptions } from '../types.js';
+import { SiteConfig } from '../types/config.js';
+import winston from 'winston';
+
+const logger = winston.createLogger({
+  level: 'info',
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    }),
+  ],
+});
+
+export class WNACGScraper {
+  private browser: Browser | null = null;
+  private page: Page | null = null;
+  private proxy?: string;
+  private headless: boolean;
+  private config: SiteConfig;
+
+  constructor(config: SiteConfig, proxy?: string, headless: boolean = false) {
+    this.config = config;
+    this.proxy = proxy;
+    this.headless = headless;
+  }
+
+  async initialize(): Promise<void> {
+    const browserArgs = [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage',
+      '--no-sandbox',
+      '--disable-extensions',
+      '--disable-infobars',
+      '--start-maximized',
+      '--disable-gpu',
+      '--disable-software-rasterizer',
+    ];
+
+    if (this.proxy) {
+      browserArgs.push(`--proxy-server=${this.proxy}`);
+    }
+
+    this.browser = await chromium.launch({
+      headless: this.headless, // 使用传入的 headless 参数
+      args: browserArgs,
+    });
+
+    this.page = await this.browser.newPage();
+
+    // 增加更多的反检测措施
+    await this.page.addInitScript(() => {
+      // 禁用 webdriver 检测
+      // @ts-ignore
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined,
+      });
+      
+      // 禁用 Chrome 自动化扩展检测
+      // @ts-ignore
+      Object.defineProperty(navigator, 'chrome', {
+        get: () => {
+          return {
+            runtime: {},
+            // 其他属性...
+          };
+        },
+      });
+      
+      // 禁用 navigator.languages 检测
+      // @ts-ignore
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['zh-CN', 'zh', 'en-US', 'en'],
+      });
+      
+      // 禁用 navigator.plugins 检测
+      // @ts-ignore
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => [{
+          0: { type: 'application/x-shockwave-flash', suffixes: 'swf', description: 'Shockwave Flash 32.0 r0' },
+          length: 1,
+          namedItem: function (_name: string) { return this[0]; }
+        }],
+      });
+    });
+  }
+
+  async handleCloudflare(): Promise<boolean> {
+    if (!this.page) return false;
+    
+    try {
+      // 等待 Cloudflare 验证页面加载
+      await this.page.waitForSelector('#cf-wrapper', { timeout: 15000 });
+      
+      // 检查是否需要验证码
+      const captchaElement = await this.page.$('#cf-captcha-container');
+      if (captchaElement) {
+        logger.info('需要手动完成 Cloudflare 验证码');
+        logger.info('请在浏览器中完成验证码，然后按 Enter 继续...');
+        
+        // 等待用户完成验证码
+        await new Promise(resolve => {
+          process.stdin.once('data', resolve);
+        });
+        
+        // 等待页面重定向
+        await this.page.waitForNavigation({ timeout: 30000 });
+        return true;
+      }
+      
+      // 检查是否有挑战页面
+      const challengeElement = await this.page.$('.cf-challenge-form');
+      if (challengeElement) {
+        logger.info('检测到 Cloudflare 挑战，等待自动解决...');
+        
+        // 尝试点击挑战按钮
+        const challengeButton = await this.page.$('.cf-button');
+        if (challengeButton) {
+          await challengeButton.click();
+        }
+        
+        // 等待挑战解决
+        await this.page.waitForNavigation({ timeout: 60000 });
+        return true;
+      }
+      
+      // 检查是否有等待页面
+      const waitingElement = await this.page.$('.cf-waiting-room');
+      if (waitingElement) {
+        logger.info('检测到 Cloudflare 等待页面，等待...');
+        
+        // 等待页面重定向
+        await this.page.waitForNavigation({ timeout: 120000 });
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      // 超时或其他错误，可能已经通过了验证
+      return false;
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.page = null;
+    }
+  }
+
+  private getCategoryByCateId(cateId: string): string {
+    return this.config.categoryMap[cateId] || '';
+  }
+
+  private buildSearchUrl(keyword: string, page: number): string {
+    const encodedKeyword = encodeURIComponent(keyword);
+    return this.config.baseUrl + this.config.urls.search
+      .replace('{keyword}', encodedKeyword)
+      .replace('{page}', page.toString());
+  }
+
+  private buildComicDetailUrl(aid: string): string {
+    return this.config.baseUrl + this.config.urls.comicDetail
+      .replace('{aid}', aid);
+  }
+
+  async search(options: SearchOptions): Promise<Comic[]> {
+    if (!this.page) {
+      await this.initialize();
+    }
+
+    const { author, onlyChinese = true } = options;
+    const comics: Comic[] = [];
+    let totalPages = 1;
+
+    // 先获取第一页，提取总页数
+    logger.info('Crawling page 1...');
+    const firstPageUrl = this.buildSearchUrl(author, 1);
+
+    if (!this.page) throw new Error('Page not initialized');
+    
+    logger.info(`Fetching page 1 from website...`);
+    await this.page.goto(firstPageUrl, { 
+      waitUntil: 'networkidle',
+      timeout: 60000
+    });
+    
+    // 处理 Cloudflare 验证码
+    await this.handleCloudflare();
+    
+    // 等待页面稳定
+    await this.page.waitForTimeout(3000);
+    
+    // 确保页面已经完成导航
+    try {
+      await this.page.waitForSelector('body', { timeout: 10000 });
+    } catch (error) {
+      // 忽略错误，继续执行
+    }
+
+    let html = await this.page.content();
+    const $ = cheerio.load(html);
+
+    // 提取总页数
+    const pageLinks = $('a[href*="&p="]');
+    const pageNumbers: number[] = [];
+    
+    pageLinks.each((_, el) => {
+      const text = $(el).text().trim();
+      const pageNum = parseInt(text);
+      if (!isNaN(pageNum)) {
+        pageNumbers.push(pageNum);
+      }
+    });
+    
+    if (pageNumbers.length > 0) {
+      totalPages = Math.max(...pageNumbers);
+      logger.info(`Found total ${totalPages} pages`);
+    }
+
+    // 解析第一页的漫画信息
+    await this.parseComicPage(html, comics, onlyChinese, author);
+
+    // 计算需要爬取的页数（去掉限制，爬取所有页面）
+    const pagesToCrawl = totalPages;
+    const remainingPages = pagesToCrawl - 1; // 已经爬取了第一页
+
+    if (remainingPages > 0) {
+      logger.info(`Crawling ${remainingPages} more pages in parallel...`);
+      
+      // 生成剩余页面的 URL
+      const pageUrls = [];
+      for (let i = 2; i <= pagesToCrawl; i++) {
+        pageUrls.push(this.buildSearchUrl(author, i));
+      }
+
+      // 并行爬取剩余页面
+      const pagePromises = pageUrls.map(async (url) => {
+        try {
+          const newPage = await this.browser?.newPage();
+          if (!newPage) throw new Error('Failed to create new page');
+          
+          logger.info(`Fetching page ${url.split('&p=')[1]} from website...`);
+          await newPage.goto(url, { 
+            waitUntil: 'networkidle',
+            timeout: 60000
+          });
+          
+          // 等待页面稳定
+          await newPage.waitForTimeout(3000);
+          
+          const pageHtml = await newPage.content();
+          await newPage.close();
+          
+          return pageHtml;
+        } catch (error) {
+          logger.error(`Error crawling page ${url}: ${error}`);
+          return null;
+        }
+      });
+
+      // 等待所有页面爬取完成
+      const pageContents = await Promise.all(pagePromises);
+      
+      // 解析每个页面的漫画信息
+      for (const pageContent of pageContents) {
+        if (pageContent) {
+          await this.parseComicPage(pageContent, comics, onlyChinese, author);
+        }
+      }
+    }
+
+    logger.info(`Found ${comics.length} comics`);
+    return comics;
+  }
+
+  private async parseComicPage(html: string, comics: Comic[], onlyChinese: boolean, author: string): Promise<void> {
+    const $ = cheerio.load(html);
+    const selectors = this.config.selectors.searchResult;
+
+    // 查找漫画项（使用配置的选择器）
+    let comicBoxes = $(selectors.comicBox[0]);
+    
+    // 尝试备用选择器
+    for (const fallbackSelector of selectors.fallbackSelectors) {
+      if (comicBoxes.length === 0) {
+        comicBoxes = $(fallbackSelector);
+      }
+    }
+    
+    if (comicBoxes.length === 0) {
+      // 尝试更通用的选择器，查找包含漫画链接的元素
+      const links = $(selectors.titleLink);
+      if (links.length > 0) {
+        comicBoxes = links;
+      }
+    }
+    
+    if (comicBoxes.length === 0) {
+      logger.warn('No comics found on this page');
+      return;
+    }
+
+    // 用于去重的 Set（避免重复添加相同的漫画）
+    const addedAids = new Set<string>();
+
+    comicBoxes.each((_, element) => {
+      const $element = $(element);
+      
+      // 查找漫画链接
+      const titleEl = $element.find(selectors.titleLink);
+      if (titleEl.length === 0) return;
+      
+      const urlEl = titleEl.attr('href');
+      if (!urlEl) return;
+
+      // 从 URL 中提取 aid
+      const aidMatch = urlEl.match(/aid-(\d+)/);
+      const aid = aidMatch ? aidMatch[1] : '';
+      
+      // 去重：如果已经添加过相同 aid 的漫画，跳过
+      if (aid && addedAids.has(aid)) {
+        return;
+      }
+      
+      // 获取标题
+      let title = titleEl.attr('title') || titleEl.text().trim();
+      // 去除 HTML 标签
+      title = title.replace(/<[^>]+>/g, '');
+      title = title.trim();
+      
+      // 分类信息通过 cate-* 类名判断
+      let category = '';
+      
+      // 首先检查 $element 本身是否包含 cate-* 类名
+      const elementClassList = $element.attr('class') || '';
+      let cateMatch = elementClassList.match(/cate-(\d+)/);
+      
+      if (cateMatch) {
+        const cateId = cateMatch[1];
+        category = this.getCategoryByCateId(cateId);
+        logger.info(`Found category via element class: ${category} (cate-${cateId})`);
+      } else {
+        // 查找包含 cate-* 类名的子元素
+        const cateElement = $element.find(selectors.categoryClass);
+        if (cateElement.length > 0) {
+          const cateClassList = cateElement.attr('class') || '';
+          cateMatch = cateClassList.match(/cate-(\d+)/);
+          if (cateMatch) {
+            const cateId = cateMatch[1];
+            category = this.getCategoryByCateId(cateId);
+            logger.info(`Found category via child element: ${category} (cate-${cateId})`);
+          }
+        }
+      }
+      
+      // 如果没有找到 cate-* 类名，尝试从标题中提取
+      if (!category) {
+        if (title.includes('漢化')) {
+          category = '漢化';
+          logger.info(`Found category via title: 漢化`);
+        }
+      }
+      
+      // 确保分类中包含"漢化"字样
+      if (category && category.includes('漢化')) {
+        logger.info(`Confirmed Chinese category: ${category}`);
+      }
+
+      // 只搜索汉化版漫画
+      if (onlyChinese && !category.includes('漢化') && !title.includes('漢化')) {
+        return;
+      }
+
+      // 查找封面图片
+      let coverUrl = '';
+      const coverEl = $element.find(selectors.coverImage);
+      if (coverEl.length > 0) {
+        coverUrl = coverEl.attr('src') || '';
+      }
+
+      // 构建完整的漫画 URL
+      const comicUrl = urlEl.startsWith('http') ? urlEl : `${this.config.baseUrl}${urlEl}`;
+
+      // 添加到结果中
+      comics.push({
+        aid,
+        title,
+        author,
+        category,
+        url: comicUrl,
+        coverUrl,
+      });
+      
+      // 记录已添加的 aid
+      if (aid) {
+        addedAids.add(aid);
+      }
+    });
+  }
+
+  async getComicDetails(aid: string): Promise<Comic | null> {
+    if (!this.page) {
+      await this.initialize();
+    }
+
+    const url = this.buildComicDetailUrl(aid);
+    const selectors = this.config.selectors.comicDetail;
+    
+    try {
+      if (!this.page) throw new Error('Page not initialized');
+      
+      await this.page.goto(url, { waitUntil: 'networkidle' });
+      await this.page.waitForTimeout(5000);
+
+      const html = await this.page.content();
+      const $ = cheerio.load(html);
+
+      const title = $(selectors.title).text().trim();
+      const category = $(selectors.category).text().trim();
+
+      const pages: number[] = [];
+      $(selectors.pageLink).each((_, el) => {
+        const pageNum = parseInt($(el).text());
+        if (!isNaN(pageNum)) {
+          pages.push(pageNum);
+        }
+      });
+
+      return {
+        aid,
+        title,
+        author: '',
+        category,
+        url,
+        pages: pages.length > 0 ? Math.max(...pages) : undefined,
+      };
+    } catch (error) {
+      logger.error(`Failed to get details for aid ${aid}: ${error}`);
+      return null;
+    }
+  }
+}
