@@ -3,16 +3,147 @@
 ## 概述
 
 本文档用图形化方式展示 WNACG Downloader 的界面设计结构，包括：
-- 桌面客户端（Electron + Vue 3）
-- CLI 工具（命令行界面 + 交互式 TUI）
+- **Web 应用**（Express + Vue 3）
+- **桌面客户端**（Electron + Vue 3）
+- **CLI 工具**（命令行界面 + 交互式 TUI）
+
+**设计原则**：
+- ✅ **Web 和 Electron 共享同一套 UI 组件**
+- ✅ **适配器模式统一通信接口**
+- ✅ **代码复用率 > 95%**
 
 ---
 
-## 第一部分：桌面客户端设计
+## 第一部分：架构设计
+
+### 1.1 UI 组件层级结构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    表现层（三端）                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
+│  │  CLI (TUI)  │  │  Web (Vue)  │  │ Electron    │            │
+│  │  Inquirer   │  │  Vite       │  │ Vite +      │            │
+│  │             │  │             │ │ Electron     │            │
+│  └─────────────┘  └─────────────┘  └─────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+                         ▲
+                         │ 共享
+┌─────────────────────────────────────────────────────────────────┐
+│              UI 组件层（Web 和 Electron 共享）                    │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  src/ui/                                                 │  │
+│  │  ├── components/        # 可复用组件                      │  │
+│  │  ├── views/             # 页面组件                        │  │
+│  │  ├── composables/       # 组合式函数（共享逻辑）          │  │
+│  │  ├── adapters/          # 适配器层（统一接口）            │  │
+│  │  └── styles/            # 共享样式                        │  │
+│  └─────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+                         ▲
+                         │ 调用
+┌─────────────────────────────────────────────────────────────────┐
+│                   核心业务层（三端共享）                         │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  src/core/ (scraper, downloader, comparer, etc.)        │  │
+│  └─────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 适配器模式设计
+
+**Web 和 Electron 的通信方式不同**：
+- Web：通过 HTTP API 与 Express 服务器通信
+- Electron：通过 IPC 与 Electron 主进程通信
+
+**解决方案**：使用适配器模式抽象统一接口
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    UI 组件                                      │
+│              (SearchView, CompareView, etc.)                    │
+└────────────────────────┬────────────────────────────────────────┘
+                         │ 调用
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                   适配器层 ⭐                                    │
+│  ┌─────────────────────────────────────────────────────────┐  │
+│  │  ISearchClient (接口)                                   │  │
+│  │  + search(keyword, options): Promise<Comic[]>           │  │
+│  │  + download(comics, options): Promise<DownloadResult>   │  │
+│  │  + compare(searchFile, options): Promise<CompareResult> │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌─────────────────┐           ┌─────────────────┐            │
+│  │  ApiClient      │           │ ElectronClient  │            │
+│  │  (Web 专用)      │           │ (Electron 专用)  │            │
+│  │                 │           │                 │            │
+│  │  fetch('/api')  │           │ electronAPI.    │            │
+│  │                 │           │                 │            │
+│  └─────────────────┘           └─────────────────┘            │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**代码示例**：
+
+```typescript
+// 1. 定义接口
+// src/ui/adapters/types.ts
+export interface ISearchClient {
+  search(keyword: string, options: SearchOptions): Promise<Comic[]>;
+}
+
+// 2. Web 实现
+// src/ui/adapters/api-client.ts
+export class ApiClient implements ISearchClient {
+  async search(keyword: string, options: SearchOptions): Promise<Comic[]> {
+    const response = await fetch('/api/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword, ...options })
+    });
+    const data = await response.json();
+    return data.comics;
+  }
+}
+
+// 3. Electron 实现
+// src/ui/adapters/electron-client.ts
+export class ElectronClient implements ISearchClient {
+  async search(keyword: string, options: SearchOptions): Promise<Comic[]> {
+    return window.electronAPI.searchComics(keyword, options);
+  }
+}
+
+// 4. UI 组件使用（无感知）
+// src/ui/views/SearchView.vue
+<script setup lang="ts">
+import { createClient } from '../adapters';
+
+const client = createClient(); // 根据环境自动创建
+
+const performSearch = async () => {
+  const results = await client.search(keyword.value, options.value);
+  // ...
+};
+</script>
+```
+
+**优势**：
+- ✅ UI 组件完全无感知通信方式
+- ✅ Web 和 Electron 代码复用率 > 95%
+- ✅ 易于测试（可以 Mock 客户端）
+- ✅ 易于扩展（新增客户端实现即可）
 
 ---
 
-## 1. 整体布局结构
+## 第二部分：共享 UI 组件设计
+
+---
+
+## 1. 整体布局结构（Web 和 Electron 共享）
+
+**说明**：以下布局设计同时适用于 Web 应用和 Electron 客户端，组件完全复用。
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -1952,4 +2083,256 @@ console.log(boxen('内容', {
 ┌──────────┬──────────┬────────────┬─────────┐
 │ 网站漫画 │ 本地漫画 │ 需要下载   │ 已拥有  │
 ├──────────┼──────────┼────────────┼─────────┤
+│    42    │    35    │     7      │    35   │
+└──────────┴──────────┴────────────┴─────────┘
+```
+
+---
+
+## 第三部分：Web 和 Electron 共享 UI 实现 ⭐ 新增
+
+### 1. 共享策略
+
+**核心原则**：
+- ✅ **组件完全复用**：Web 和 Electron 使用相同的 Vue 组件
+- ✅ **样式完全一致**：共享同一套 CSS 样式和主题
+- ✅ **逻辑完全共享**：组合式函数（composables）完全复用
+- ✅ **仅适配器不同**：通过适配器模式处理通信差异
+
+**代码复用率**：> 95%
+
+---
+
+### 2. 目录结构
+
+```
+src/ui/                          # 共享 UI 目录
+├── components/                  # 可复用组件
+│   ├── Header.vue              # 顶部导航（共享）
+│   ├── Footer.vue              # 底部状态（共享）
+│   ├── ComicCard.vue           # 漫画卡片（共享）
+│   ├── StatCard.vue            # 统计卡片（共享）
+│   ├── QueueItem.vue           # 队列项（共享）
+│   └── DownloadProgress.vue    # 下载进度（共享）
 │
+├── views/                       # 页面组件
+│   ├── SearchView.vue          # 搜索页面（共享）
+│   ├── CompareView.vue         # 对比页面（共享）
+│   ├── DownloadView.vue        # 下载页面（共享）
+│   └── ConfigView.vue          # 配置页面（共享）
+│
+├── composables/                 # 组合式函数（共享逻辑）⭐
+│   ├── useSearch.ts            # 搜索逻辑
+│   ├── useDownload.ts          # 下载逻辑
+│   ├── useCompare.ts           # 对比逻辑
+│   └── useConfig.ts            # 配置逻辑
+│
+├── adapters/                    # 适配器层（处理差异）⭐
+│   ├── types.ts                # 接口定义
+│   ├── api-client.ts           # Web API 客户端
+│   ├── electron-client.ts      # Electron IPC 客户端
+│   └── index.ts                # 工厂函数
+│
+├── styles/                      # 共享样式
+│   ├── variables.css           # CSS 变量
+│   ├── base.css                # 基础样式
+│   └── components.css          # 组件样式
+│
+├── main.ts                      # Web 入口
+├── App.vue                      # 根组件
+└── vite.config.ts               # Vite 配置
+```
+
+---
+
+### 3. 实现细节
+
+#### 3.1 环境检测
+
+```typescript
+// src/ui/adapters/index.ts
+export function createClient() {
+  // 检测运行环境
+  if (typeof window !== 'undefined' && 'electronAPI' in window) {
+    // Electron 环境
+    return new ElectronClient();
+  } else {
+    // Web 环境
+    return new ApiClient();
+  }
+}
+```
+
+#### 3.2 Web 启动
+
+```typescript
+// src/ui/main.ts (Web)
+import { createApp } from 'vue';
+import App from './App.vue';
+import { createClient } from './adapters';
+
+const app = createApp(App);
+
+// 提供客户端实例
+app.provide('client', createClient());
+
+app.mount('#app');
+```
+
+#### 3.3 Electron 启动
+
+```typescript
+// src/electron/renderer/main.ts (Electron)
+import { createApp } from 'vue';
+import App from '../../ui/App.vue'; // 使用共享 UI
+import { createClient } from '../../ui/adapters';
+
+const app = createApp(App);
+
+// 提供客户端实例
+app.provide('client', createClient());
+
+app.mount('#app');
+```
+
+#### 3.4 Vite 配置
+
+```typescript
+// vite.config.ts (共享配置)
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import path from 'path';
+
+export default defineConfig({
+  plugins: [vue()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src/ui'),
+    },
+  },
+  // Web 和 Electron 共享此配置
+});
+```
+
+---
+
+### 4. 构建和部署
+
+#### 4.1 Web 构建
+
+```bash
+# 开发模式
+npm run dev:web
+
+# 生产构建
+npm run build:web
+
+# 输出目录
+dist/web/
+├── index.html
+├── assets/
+│   ├── index.js
+│   └── style.css
+└── ...
+```
+
+#### 4.2 Electron 构建
+
+```bash
+# 开发模式
+npm run dev:electron
+
+# 生产构建
+npm run build:electron
+
+# 输出目录
+dist/electron/
+├── main.js          # Electron 主进程
+├── preload.js       # 预加载脚本
+├── renderer/        # 渲染进程（共享 UI）
+│   ├── index.html
+│   └── assets/
+└── ...
+```
+
+---
+
+### 5. 测试策略
+
+#### 5.1 单元测试
+
+```typescript
+// 测试共享组件
+import { describe, it, expect } from 'vitest';
+import { mount } from '@vue/test-utils';
+import ComicCard from '@/components/ComicCard.vue';
+
+describe('ComicCard', () => {
+  it('renders correctly', () => {
+    const wrapper = mount(ComicCard, {
+      props: {
+        comic: mockComic
+      }
+    });
+    expect(wrapper.text()).toContain(mockComic.title);
+  });
+});
+```
+
+#### 5.2 适配器测试
+
+```typescript
+// 测试 Web API 客户端
+import { ApiClient } from '@/adapters/api-client';
+
+describe('ApiClient', () => {
+  it('searches comics', async () => {
+    const client = new ApiClient();
+    const results = await client.search('TYPE90');
+    expect(results).toBeInstanceOf(Array);
+  });
+});
+
+// 测试 Electron 客户端
+import { ElectronClient } from '@/adapters/electron-client';
+
+describe('ElectronClient', () => {
+  it('searches comics via IPC', async () => {
+    const client = new ElectronClient();
+    // Mock window.electronAPI
+    window.electronAPI = {
+      searchComics: vi.fn().mockResolvedValue(mockComics)
+    };
+    const results = await client.search('TYPE90');
+    expect(results).toBeInstanceOf(Array);
+  });
+});
+```
+
+---
+
+### 6. 优势总结
+
+**开发效率**：
+- ✅ 一套代码，多处运行
+- ✅ 修改一次，多端生效
+- ✅ 减少 50% 以上开发工作量
+
+**维护成本**：
+- ✅ Bug 修复一次即可
+- ✅ 功能更新同步
+- ✅ 测试用例可复用
+
+**用户体验**：
+- ✅ Web 和 Electron 界面完全一致
+- ✅ 用户可以自由切换
+- ✅ 学习成本低
+
+**技术优势**：
+- ✅ 清晰的职责分离
+- ✅ 易于测试和 Mock
+- ✅ 易于扩展新功能
+
+---
+
+**文档结束**

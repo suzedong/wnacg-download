@@ -2,8 +2,12 @@
 
 ## 项目信息
 - **名称**: WNACG Downloader
-- **产品形态**: CLI + 桌面客户端双架构
+- **产品形态**: CLI + Web 应用 + 桌面客户端三架构
 - **核心功能**: 搜索、对比、下载汉化漫画
+- **架构特点**: 
+  - 核心业务逻辑完全复用
+  - Web 和 Electron 共享 UI 组件（复用率 > 95%）
+  - 适配器模式统一通信接口
 
 ---
 
@@ -126,6 +130,7 @@ const emit = defineEmits(['select', 'download']);
 - 遵循 [`ui-design/spec.md`](../specs/ui-design/spec.md) 中的设计稿
 - 保持界面一致性
 - 响应式布局
+- **Web 和 Electron 共享 UI 组件**
 
 ### 样式规范
 - 使用 scoped 样式
@@ -137,6 +142,13 @@ const emit = defineEmits(['select', 'download']);
 - 可复用组件放在 `src/ui/components/`
 - 页面组件放在 `src/ui/views/`
 - 组件命名使用 PascalCase
+- **Web 和 Electron 完全复用**
+
+### 适配器模式
+- **适配器层**：`src/ui/adapters/`
+- **Web API 客户端**：`api-client.ts`
+- **Electron IPC 客户端**：`electron-client.ts`
+- **UI 组件无感知通信方式**
 
 ---
 
@@ -313,9 +325,10 @@ alert('Download complete!');
 | **开发规范** | 本文档 | `rules/dev-rules.md` |
 | **需求规格** | 功能需求详细描述 | `specs/requirements/spec.md` |
 | **架构设计** | 技术实现方案 | `specs/architecture/spec.md` |
+| **界面设计** | UI 设计、共享策略、适配器模式 | `specs/ui-design/spec.md` |
 | **开发计划** | 任务清单和验收标准 | `specs/DEVELOPMENT_PLAN.md` |
 
 ---
 
-**最后更新**: 2026-04-12  
-**版本**: v2.0（AI 开发版）
+**最后更新**: 2026-04-14  
+**版本**: v3.0（三架构 AI 开发版）

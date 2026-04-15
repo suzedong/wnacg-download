@@ -18,10 +18,19 @@ export async function checkAndInstallDependencies(): Promise<boolean> {
   // 检查 Playwright 浏览器
   let hasChromium = false;
   try {
-    const msPlaywrightDir = path.join(process.env.LOCALAPPDATA || '', 'ms-playwright');
-    if (fs.existsSync(msPlaywrightDir)) {
-      const dirs = fs.readdirSync(msPlaywrightDir);
-      hasChromium = dirs.some(dir => dir.startsWith('chromium-'));
+    // 检查 macOS 和 Linux 的 Playwright 缓存目录
+    const msPlaywrightDirs = [
+      path.join(process.env.HOME || '', 'Library', 'Caches', 'ms-playwright'),
+      path.join(process.env.HOME || '', '.cache', 'ms-playwright'),
+      path.join(process.env.LOCALAPPDATA || '', 'ms-playwright'),
+    ];
+    
+    for (const msPlaywrightDir of msPlaywrightDirs) {
+      if (fs.existsSync(msPlaywrightDir)) {
+        const dirs = fs.readdirSync(msPlaywrightDir);
+        hasChromium = dirs.some(dir => dir.startsWith('chromium-'));
+        if (hasChromium) break;
+      }
     }
   } catch (e) {
     // 忽略错误

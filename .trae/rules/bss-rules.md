@@ -4,11 +4,18 @@
 
 **项目名称**：WNACG Downloader
 
-**产品形态**：CLI + 桌面客户端双架构
+**产品形态**：CLI + Web 应用 + 桌面客户端三架构
 
 **核心功能**：搜索、对比、下载汉化漫画
 
 **目标用户**：需要批量下载汉化漫画的用户
+
+**架构特点**：
+- CLI：命令行工具，支持脚本化
+- Web：浏览器访问，跨平台
+- Electron：桌面应用，原生体验
+- 核心业务逻辑完全复用
+- Web 和 Electron 共享 UI 组件（复用率 > 95%）
 
 ---
 
@@ -104,9 +111,11 @@
 
 ## 核心设计理念
 
-- **CLI 和客户端复用同一套业务逻辑**
+- **CLI、Web、Electron 复用同一套业务逻辑**
 - 核心模块：`src/core/`（scraper, downloader, scanner, comparer, ai）
-- CLI 和客户端只是交互方式不同
+- **Web 和 Electron 共享 UI 组件**：`src/ui/`
+- **适配器模式**：统一通信接口（HTTP vs IPC）
+- CLI、Web、Electron 只是交互方式不同
 
 ---
 

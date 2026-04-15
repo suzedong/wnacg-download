@@ -32,18 +32,19 @@
 - ✅ 智能对比本地已有漫画避免重复
 - ✅ AI 智能匹配漫画名称（准确率 > 90%）
 - ✅ 支持断点续传和并发下载
-- ✅ CLI、TUI、GUI 三种交互方式
+- ✅ **CLI、Web、Electron 三种交互方式**
 - ✅ 核心业务逻辑完全复用
+- ✅ **Web 和 Electron 共享 UI 组件（复用率 > 95%）**
 
 ### 开发原则
 
-**核心理念**: CLI 和 UI 复用同一套业务逻辑，只是交互方式不同。
+**核心理念**: CLI、Web、Electron 复用同一套业务逻辑，只是交互方式不同。
 
 ```
 ┌─────────────────────────────────────────┐
 │         表现层 (三种交互方式)            │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
-│  │   CLI   │  │   TUI   │  │   UI    │ │
+│  │   CLI   │  │   Web   │  │ Electron │ │
 │  └─────────  └─────────┘  └─────────┘ │
 └─────────────────────────────────────────┘
               ↓ 复用 ↓
@@ -55,6 +56,12 @@
 └─────────────────────────────────────────┘
 ```
 
+**架构升级**:
+- **三架构设计**：CLI + Web + Electron
+- **UI 复用**：Web 和 Electron 共享 Vue 组件
+- **适配器模式**：统一通信接口（HTTP vs IPC）
+- **配置共享**：使用 conf 库统一管理
+
 ---
 
 ## 架构设计
@@ -65,12 +72,12 @@
 ┌─────────────────────────────────────────────────────────┐
 │                   表现层                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  CLI 命令行  │  │  TUI 文本 UI │  │ Electron UI │    │
-│  │  (src/cli)  │  │  (src/tui)  │  │  (src/ui)   │    │
-│  └──────┬──────┘  └────────────┘  └────────────┘    │
-└─────────┼────────────────┼────────────────────────────┘
+│  │  CLI 命令行  │  │  Web 应用    │  │ Electron    │    │
+│  │  (src/cli)  │  │  (src/web)  │  │  (src/ui)   │    │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘    │
+└─────────┼────────────────┼────────────────┼────────────┘
           │                │                │
-          └────────────────────────────────┘
+          └────────────────┴────────────────┘
                            ↓
           ┌────────────────────────────────┐
           │     业务逻辑层 (核心复用)       │
@@ -91,6 +98,56 @@
           │  │  src/config/             │ │
           │  └──────────────────────────┘ │
           └────────────────────────────────┘
+```
+
+### 新增：Web 架构
+
+**技术栈**：
+- 后端：Express.js（提供 RESTful API）
+- 前端：Vue 3 + Vite（与 Electron 共享 UI）
+- 通信：HTTP API（Fetch API）
+- 部署：Node.js 直接运行
+
+**目录结构**：
+```
+src/web/
+├── api-server.ts          # Express 服务器
+├── routes/                # API 路由
+│   ├── search.ts          # 搜索 API
+│   ├── compare.ts         # 对比 API
+│   ├── download.ts        # 下载 API
+│   └── cache.ts           # 缓存管理 API
+└── middleware/            # 中间件
+    ├── cors.ts            # CORS 处理
+    └── error.ts           # 错误处理
+```
+
+### 新增：UI 共享架构
+
+**设计原则**：
+- Web 和 Electron 共享同一套 Vue 组件
+- 通过适配器模式处理通信差异
+- 代码复用率 > 95%
+
+**目录结构**：
+```
+src/ui/
+├── components/            # 可复用组件
+├── views/                 # 页面组件
+├── composables/           # 组合式函数（共享逻辑）
+├── adapters/              # 适配器层（统一接口）
+│   ├── api-client.ts      # Web API 客户端
+│   └── electron-client.ts # Electron IPC 客户端
+└── main.ts                # Web 入口
+```
+
+**启动方式**：
+```bash
+# Web 开发模式
+npm run dev:web
+
+# Electron 开发模式
+npm run dev:electron
 ```
 
 ### 组件层级结构
@@ -316,7 +373,151 @@ export const ErrorCodes = {
 
 ---
 
-#### Task 1.1.4: Scraper 模块重构
+#### Task 1.1.4: 核心模块接口抽象 ⭐ 新增
+**工作量**: 3 小时 | **优先级**: P0
+
+**任务描述**:
+- 抽象核心模块的统一接口
+- 支持同步和异步调用
+- 支持事件通知（进度、完成等）
+- 为 Web 和 Electron 提供统一的调用接口
+
+**关键接口**:
+```typescript
+// src/core/interfaces.ts
+export interface ISearchService {
+  search(options: SearchOptions): Promise<Comic[]>;
+}
+
+export interface IDownloadService {
+  download(comics: Comic[], options: DownloadOptions): Promise<DownloadResult>;
+  on(event: 'progress', callback: (progress: ProgressEvent) => void): void;
+  on(event: 'completed', callback: (result: DownloadResult) => void): void;
+  on(event: 'error', callback: (error: Error) => void): void;
+}
+
+export interface ICompareService {
+  compare(searchFile: string, localPath: string): Promise<CompareResult>;
+}
+
+// 进度事件
+export interface ProgressEvent {
+  aid: string;
+  downloaded: number;
+  total: number;
+  speed?: number;
+}
+
+// 完成事件
+export interface CompletedEvent {
+  aid: string;
+  savedPath: string;
+  pages: number;
+}
+```
+
+**实现方式**:
+```typescript
+// src/core/scraper.ts
+export class WNACGScraper implements ISearchService {
+  async search(options: SearchOptions): Promise<Comic[]> {
+    // 实现搜索逻辑
+  }
+}
+
+// src/core/downloader.ts
+export class ComicDownloader extends EventEmitter implements IDownloadService {
+  async download(comics: Comic[], options: DownloadOptions): Promise<DownloadResult> {
+    this.emit('start', { total: comics.length });
+    
+    for (const comic of comics) {
+      this.emit('progress', { 
+        aid: comic.aid, 
+        downloaded: 1, 
+        total: comic.pages 
+      });
+    }
+    
+    this.emit('completed', { success: true });
+  }
+}
+```
+
+**验收标准**:
+- [ ] 接口定义完整
+- [ ] CLI 可以直接调用
+- [ ] Web API 可以封装调用
+- [ ] Electron IPC 可以封装调用
+- [ ] TypeScript 编译无错误
+
+---
+
+#### Task 1.1.5: 事件系统完善 ⭐ 新增
+**工作量**: 2 小时 | **优先级**: P1
+
+**任务描述**:
+- 完善核心模块的事件系统
+- 支持进度事件
+- 支持完成事件
+- 支持错误事件
+- 支持取消事件
+
+**事件类型**:
+```typescript
+// src/core/events.ts
+export type DownloadEventType = 
+  | 'start'      // 开始下载
+  | 'progress'   // 下载进度
+  | 'completed'  // 下载完成
+  | 'error'      // 下载错误
+  | 'cancelled'  // 下载取消
+  | 'retry'      // 重试下载
+  ;
+
+export class DownloadEvent {
+  type: DownloadEventType;
+  aid: string;
+  data?: any;
+  
+  constructor(type: DownloadEventType, aid: string, data?: any) {
+    this.type = type;
+    this.aid = aid;
+    this.data = data;
+  }
+}
+```
+
+**使用示例**:
+```typescript
+// Web/Electron 监听事件
+downloader.on('progress', (event: ProgressEvent) => {
+  updateUI({
+    aid: event.aid,
+    progress: `${event.downloaded}/${event.total}`,
+    percentage: (event.downloaded / event.total * 100).toFixed(1)
+  });
+});
+
+downloader.on('completed', (result: DownloadResult) => {
+  showNotification(`下载完成：${result.comic.title}`);
+});
+
+downloader.on('error', (error: Error) => {
+  showError(`下载失败：${error.message}`);
+});
+```
+
+**验收标准**:
+- [ ] 事件系统工作正常
+- [ ] Web 可以监听进度事件
+- [ ] Electron 可以监听进度事件
+- [ ] CLI 可以显示进度
+- [ ] 支持事件取消
+- [ ] 支持错误处理
+
+---
+
+#### Task 1.1.6: Scraper 模块重构
 **工作量**: 6 小时 | **优先级**: P0
 
 **任务描述**:
@@ -380,6 +581,60 @@ export const ErrorCodes = {
 - [ ] Scanner 正确扫描本地漫画
 - [ ] Comparer 正确对比
 - [ ] AI 匹配准确率 > 85%
+
+---
+
+#### Task 1.3: Web 基础架构 ⭐ 新增
+**工作量**: 4 小时 | **优先级**: P0
+
+**任务描述**:
+- 创建 Express 服务器框架
+- 配置基础中间件（CORS、错误处理）
+- 实现健康检查 API
+- 配置开发服务器
+- 创建基础路由结构
+
+**目录结构**:
+```
+src/web/
+├── api-server.ts          # Express 服务器入口
+├── routes/
+│   └── health.ts          # 健康检查路由
+└── middleware/
+    ├── cors.ts            # CORS 中间件
+    └── error.ts           # 错误处理中间件
+```
+
+**实现示例**:
+```typescript
+// src/web/api-server.ts
+import express from 'express';
+import cors from 'cors';
+
+const app = express();
+
+// 中间件
+app.use(cors());
+app.use(express.json());
+
+// 健康检查
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 启动服务器
+const PORT = 3000;
+app.listen(PORT, () => {
+  console.log(`Web API Server running on http://localhost:${PORT}`);
+});
+```
+
+**验收标准**:
+- [ ] Express 服务器可以启动
+- [ ] 健康检查 API 正常（GET /api/health）
+- [ ] CORS 配置正确
+- [ ] 可以访问 http://localhost:3000
+- [ ] 错误处理正常
 
 ---
 
@@ -600,7 +855,100 @@ wnacg-dl search TYPE90
 
 ---
 
-### Phase 2 验收标准
+#### Task 2.9: Web API 服务器 ⭐ 新增
+**工作量**: 4 小时 | **优先级**: P0
+
+**功能**:
+- ✅ 创建 Express 服务器
+- ✅ 实现搜索 API 端点（POST /api/search）
+- ✅ 实现缓存管理 API（GET /api/cache/list, DELETE /api/cache/:key）
+- ✅ CORS 和错误处理
+- ✅ 仅监听 localhost（安全）
+
+**目录结构**:
+```
+src/web/
+├── api-server.ts          # Express 服务器入口
+├── routes/
+│   ├── search.ts          # 搜索 API
+│   └── cache.ts           # 缓存管理 API
+└── middleware/
+    └── error.ts           # 错误处理
+```
+
+**验收标准**:
+- [ ] Express 服务器启动正常
+- [ ] API 端点工作正常
+- [ ] 支持跨域请求（CORS）
+- [ ] 错误处理完善
+- [ ] 仅监听 localhost
+
+---
+
+#### Task 2.10: Web 适配器层 ⭐ 新增
+**工作量**: 3 小时 | **优先级**: P0
+
+**功能**:
+- ✅ 创建适配器接口定义（ISearchClient, IDownloadClient）
+- ✅ 实现 Web API 客户端（ApiClient）
+- ✅ 实现 Electron IPC 客户端（ElectronClient）
+- ✅ 创建工厂函数（createClient）
+- ✅ 环境检测（自动选择合适的客户端）
+
+**目录结构**:
+```
+src/ui/adapters/
+├── types.ts               # 接口定义
+├── api-client.ts          # Web API 客户端
+├── electron-client.ts     # Electron IPC 客户端
+└── index.ts               # 工厂函数
+```
+
+**验收标准**:
+- [ ] 接口定义完整
+- [ ] Web 客户端调用 HTTP API 正常
+- [ ] Electron 客户端调用 IPC 正常
+- [ ] 工厂函数自动检测环境
+- [ ] UI 组件无感知通信方式
+
+---
+
+#### Task 2.11: Web UI 启动 ⭐ 新增
+**工作量**: 2 小时 | **优先级**: P0
+
+**功能**:
+- ✅ 创建 Web 入口文件（src/ui/main.ts）
+- ✅ 配置 Vite 构建
+- ✅ 创建 HTML 模板
+- ✅ 提供客户端实例（provide/inject）
+- ✅ 环境检测初始化
+
+**验收标准**:
+- [ ] Web 应用启动正常
+- [ ] Vite 构建正常
+- [ ] 客户端实例注入正确
+- [ ] 可以访问 http://localhost:5173
+
+---
+
+#### Task 2.12: Web 搜索页面测试 ⭐ 新增
+**工作量**: 3 小时 | **优先级**: P0
+
+**功能**:
+- ✅ 测试 SearchView 组件在 Web 环境的工作
+- ✅ 测试 ApiClient 调用搜索 API
+- ✅ 测试搜索结果展示
+- ✅ 测试错误处理
+
+**验收标准**:
+- [ ] Web 搜索功能正常
+- [ ] API 调用正常
+- [ ] 结果显示正常
+- [ ] 错误提示友好
+
+---
+
+### Phase 2 验收标准（更新）
 
 #### 功能完整性
 - [ ] CLI 和 UI 搜索结果一致
@@ -608,16 +956,21 @@ wnacg-dl search TYPE90
 - [ ] 搜索结果预览功能正常
 - [ ] 覆盖确认机制正常
 - [ ] CLI --list 参数正常
+- [ ] **Web API 服务器正常 ⭐ 新增**
+- [ ] **Web 和 Electron 共享 UI 正常 ⭐ 新增**
+- [ ] **适配器模式工作正常 ⭐ 新增**
 
 #### 性能
 - [ ] 搜索结果列表加载 < 100ms
 - [ ] 预览页面渲染 < 200ms
+- [ ] **API 响应 < 500ms ⭐ 新增**
 
 #### 用户体验
 - [ ] 列表滚动流畅
 - [ ] 过滤响应及时
 - [ ] 错误提示友好
 - [ ] 快捷键支持（Ctrl+1~4）
+- [ ] **Web 和 Electron 界面一致 ⭐ 新增**
 
 ---
 
@@ -948,13 +1301,33 @@ Week 9:   集成与测试
 
 | 阶段 | 任务数 | 预计工时 | 难度 |
 |------|--------|----------|------|
-| Phase 1: 核心重构 | 10 | 40 小时 | 中等 |
-| Phase 2: 搜索优化 | 8 | 18.5 小时 ⬇️ | 中等 |
+| **Phase 1: 核心重构** | **13** | **49 小时** ⬆️ | 中等 |
+| Phase 2: 搜索优化 | **12** | **30.5 小时** ⬆️ | 中等 |
 | Phase 3: 对比优化 | 3 | 13 小时 | 中等 |
 | Phase 4: 下载优化 | 3 | 10 小时 | 中等 |
 | Phase 5: 配置优化 | 3 | 8 小时 | 简单 |
+| **Web 架构实现** | **4** | **12 小时** ⭐ 新增 | 中等 |
 | 集成测试 | - | 8 小时 | 中等 |
-| **总计** | **27** | **97.5 小时** ⬇️ | **中等** |
+| **总计** | **38** | **118.5 小时** ⬆️ | **中等** |
+
+**Phase 1 任务明细**：
+```
+Task 1.1.1: 类型系统完善        (4h)
+Task 1.1.2: 配置管理重构         (3h)
+Task 1.1.3: 错误处理统一         (3h)
+Task 1.1.4: 核心模块接口抽象     (3h)   ⭐ 新增
+Task 1.1.5: 事件系统完善         (2h)   ⭐ 新增
+Task 1.1.6: Scraper 模块重构     (6h)
+Task 1.1.7: Downloader 模块重构  (6h)
+Task 1.1.8: Scanner 模块重构     (4h)
+Task 1.1.9: Comparer 模块重构    (4h)
+Task 1.1.10: AI 匹配模块重构      (6h)
+Task 1.3: Web 基础架构           (4h)   ⭐ 新增
+Task 1.2.1: CLI 基础功能         (3h)
+Task 1.2.2: CLI 命令实现         (3h)
+
+总计：49 小时（原 40 小时 → 现 49 小时）
+```
 
 **Phase 2 任务明细**：
 ```
@@ -966,9 +1339,34 @@ Task 2.5: 搜索结果管理模块    (3h)   ⭐ 新增
 Task 2.6: 搜索结果列表组件    (4h)   ⭐ 新增
 Task 2.7: 搜索结果预览组件    (4h)   ⭐ 新增
 Task 2.8: CLI 搜索优化        (2h)   ⭐ 新增
+Task 2.9: Web API 服务器      (4h)   ⭐ 新增
+Task 2.10: Web 适配器层       (3h)   ⭐ 新增
+Task 2.11: Web UI 启动        (2h)   ⭐ 新增
+Task 2.12: Web 搜索页面测试   (3h)   ⭐ 新增
 
-总计：18.5 小时（原 21 小时 → 现 18.5 小时）
+总计：30.5 小时（原 18.5 小时 → 现 30.5 小时）
 ```
+
+**Web 架构实现任务明细** ⭐ 新增：
+```
+Task 2.9: Web API 服务器       (4h)   # Express 服务器
+Task 2.10: Web 适配器层        (3h)   # 适配器模式
+Task 2.11: Web UI 启动         (2h)   # Web 入口
+Task 2.12: Web 搜索页面测试    (3h)   # 集成测试
+
+总计：12 小时
+```
+
+**工作量增加说明**：
+- Phase 1 增加了 3 个任务（+9 小时）
+  - 核心模块接口抽象（+3h）
+  - 事件系统完善（+2h）
+  - Web 基础架构（+4h）
+- Phase 2 增加了 4 个 Web 任务（+12 小时）
+- Phase 3-5 各增加 Web 任务（+9 小时，分散到各阶段）
+- 集成测试增加 Web 测试（+4-6h）
+- 总工作量从 97.5 小时增加到 118.5 小时（+21 小时，+21%）
+- 任务数从 27 个增加到 38 个（+11 个）
 
 ---
 
@@ -1007,19 +1405,156 @@ Task 2.8: CLI 搜索优化        (2h)   ⭐ 新增
 
 ---
 
-## 待确认事项
+## 开发路线图（更新）⭐
 
-### 配置文件路径
-- **状态**: 待确认
-- **说明**: 配置文件在项目文件夹下的具体存储位置
+```
+Week 1-2: Phase 1 - 核心代码重构与基础功能 + Web 基础架构 ⭐
+    ↓ 建立稳定的核心层（支持三架构）
+    ↓ Web 服务器框架搭建完成
 
-### 第三方网站数据源
-- **状态**: 待设计
-- **说明**: 第三方网站的数据获取方式、格式、存储等
+Week 3:   Phase 2 - 搜索功能完善 + Web 搜索实现 ⭐
+    ↓ 统一搜索体验
+    ↓ Web 搜索功能完成
 
-### AI 模型实现细节
-- **状态**: 待设计
-- **说明**: 本地模型文件格式、远程 API 接口规范等
+Week 4-5: Phase 3 - 对比功能完善 + Web 对比实现 ⭐
+    ↓ AI 匹配 > 90%
+    ↓ Web 对比功能完成
+
+Week 6-7: Phase 4 - 下载功能完善 + Web 下载实现 ⭐
+    ↓ 快速稳定下载
+    ↓ Web 下载功能完成
+
+Week 8:   Phase 5 - 配置管理 + Web 配置实现 ⭐
+    ↓ 统一配置管理
+    ↓ Web 配置功能完成
+
+Week 9:   集成与测试（CLI + Web + Electron）⭐
+    ↓ 三架构完整验证
+    ↓ 跨架构测试
+```
+
+---
+
+## 风险管理（更新）⭐
+
+### 技术风险（新增）
+
+| 风险 | 影响 | 概率 | 缓解措施 |
+|------|------|------|----------|
+| Cloudflare 验证码 | 高 | 高 | 使用非无头模式，支持手动完成 |
+| AI 匹配准确率 | 中 | 中 | 使用多种匹配算法，支持人工确认 |
+| 下载失败 | 中 | 中 | 重试机制，断点续传 |
+| 并发控制失效 | 高 | 低 | 信号量严格控制，单元测试验证 |
+| **Web/Electron 代码不同步** | 高 | 中 | 强制共享 + 自动化测试 |
+| **适配器模式复杂度** | 中 | 中 | 详细文档 + 代码审查 |
+| **端口冲突** | 中 | 低 | 端口检测 + 自动切换 |
+| **CORS 问题** | 中 | 中 | 统一中间件 + 白名单 |
+| **事件系统内存泄漏** | 高 | 中 | 自动清理 + 检测工具 |
+
+---
+
+## Phase 验收标准（更新）⭐
+
+### Phase 3 验收标准（新增 Web）
+
+#### 功能完整性
+- [ ] CLI 和 UI 对比结果一致
+- [ ] AI 匹配准确率 > 90%
+- [ ] 对比结果展示清晰
+- [ ] Web 对比 API 正常
+- [ ] Web 对比页面工作正常
+- [ ] 三端对比结果一致
+
+#### 性能
+- [ ] 对比计算 < 1s
+- [ ] Web API 响应 < 500ms
+
+---
+
+### Phase 4 验收标准（新增 Web）
+
+#### 功能完整性
+- [ ] CLI 和 UI 下载功能正常
+- [ ] 支持断点续传
+- [ ] 并发控制正常
+- [ ] 下载成功率 > 95%
+- [ ] Web 下载 API 正常
+- [ ] Web 下载页面工作正常
+- [ ] Web 进度推送正常
+- [ ] 三端下载功能一致
+
+#### 性能
+- [ ] 并发下载速度 > 5MB/s
+- [ ] Web 进度更新延迟 < 200ms
+
+---
+
+### Phase 5 验收标准（新增 Web）
+
+#### 配置管理
+- [ ] 支持导入导出
+- [ ] 配置验证正常
+- [ ] 配置变更通知
+- [ ] Web 配置 API 正常
+- [ ] Web 配置页面工作正常
+- [ ] 三端配置同步
+
+---
+
+## 集成测试（更新）⭐
+
+### Web 工作流测试
+```
+1. 启动 Web 服务器
+   npm run dev:web
+
+2. 访问 http://localhost:3000
+
+3. 搜索漫画
+   - 输入关键字 "TYPE90"
+   - 点击搜索按钮
+   - 验证搜索结果列表
+
+4. 对比漫画
+   - 选择搜索结果
+   - 选择本地漫画目录
+   - 验证对比结果
+
+5. 下载漫画
+   - 添加到下载队列
+   - 开始下载
+   - 验证下载进度
+   - 验证下载结果
+```
+
+### 跨架构测试
+```
+1. CLI 搜索 → Web 对比 → Electron 下载
+   # Step 1: CLI 搜索
+   wnacg-dl search TYPE90
+   
+   # Step 2: Web 对比
+   访问 Web，选择搜索缓存，进行对比
+   
+   # Step 3: Electron 下载
+   在 Electron 中查看对比结果，开始下载
+
+2. 配置同步测试
+   # Step 1: CLI 设置代理
+   wnacg-dl config --set defaultProxy=http://127.0.0.1:7890
+   
+   # Step 2: Web 验证
+   访问 Web 配置页面，验证代理设置
+   
+   # Step 3: Electron 验证
+   打开 Electron，验证代理设置
+```
+
+### 自动化测试
+- [ ] Web API 单元测试
+- [ ] 适配器层单元测试
+- [ ] Web 组件 E2E 测试（Playwright，可选）
+- [ ] 跨架构集成测试
 
 ---
 

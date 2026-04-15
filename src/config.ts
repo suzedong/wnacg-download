@@ -1,7 +1,7 @@
-import Conf from 'conf';
 import { Config } from './types/index.js';
 import path from 'path';
 import os from 'os';
+import fs from 'fs';
 
 /**
  * 默认配置
@@ -26,15 +26,42 @@ const defaultConfig: Config = {
  * 支持配置的读取、设置、监听和持久化
  */
 export class ConfigManager {
-  private config: Conf<Config>;
+  private config: Partial<Config>;
+  private configPath: string;
   private listeners: Map<keyof Config, Set<(value: any) => void>>;
 
   constructor() {
-    this.config = new Conf<Config>({
-      projectName: 'wnacg-downloader',
-      defaults: defaultConfig,
-    });
+    // 在项目目录下创建配置文件，避免权限问题
+    this.configPath = path.join(process.cwd(), '.config', 'config.json');
+    this.config = { ...defaultConfig };
     this.listeners = new Map();
+    
+    // 加载已有配置
+    this.load();
+  }
+  
+  private load(): void {
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const content = fs.readFileSync(this.configPath, 'utf-8');
+        const savedConfig = JSON.parse(content);
+        this.config = { ...this.config, ...savedConfig };
+      }
+    } catch (error) {
+      // 忽略加载错误，使用默认配置
+    }
+  }
+  
+  private save(): void {
+    try {
+      const dir = path.dirname(this.configPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.configPath, JSON.stringify(this.config, null, 2), 'utf-8');
+    } catch (error) {
+      // 忽略保存错误
+    }
   }
 
   /**
@@ -43,7 +70,7 @@ export class ConfigManager {
    * @returns 配置值
    */
   get<K extends keyof Config>(key: K): Config[K] {
-    return this.config.get(key);
+    return (this.config as any)[key] as Config[K];
   }
 
   /**
@@ -53,10 +80,11 @@ export class ConfigManager {
    */
   set<K extends keyof Config>(key: K, value: Config[K]): void {
     if (value === undefined) {
-      this.config.delete(key);
+      delete (this.config as any)[key];
     } else {
-      this.config.set(key, value);
+      (this.config as any)[key] = value;
       this.notifyListeners(key, value);
+      this.save();
     }
   }
 
@@ -65,14 +93,15 @@ export class ConfigManager {
    * @returns 完整配置对象
    */
   getAll(): Config {
-    return this.config.store;
+    return this.config as Config;
   }
 
   /**
    * 重置所有配置为默认值
    */
   reset(): void {
-    this.config.clear();
+    this.config = { ...defaultConfig };
+    this.save();
   }
 
   /**

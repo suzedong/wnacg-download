@@ -334,19 +334,19 @@ export class WNACGScraper {
       title = title.replace(/<[^>]+>/g, '');
       title = title.trim();
       
-      // 分类信息通过 cate-* 类名判断
+      // 分类信息通过多种方式判断
       let category = '';
       
-      // 首先检查 $element 本身是否包含 cate-* 类名
+      // 1. 首先检查 $element 本身是否包含 cate-* 类名
       const elementClassList = $element.attr('class') || '';
       let cateMatch = elementClassList.match(/cate-(\d+)/);
       
       if (cateMatch) {
         const cateId = cateMatch[1];
         category = this.getCategoryByCateId(cateId);
-        logger.info(`Found category via element class: ${category} (cate-${cateId})`);
+        logger.debug(`Found category via element class: ${category} (cate-${cateId})`);
       } else {
-        // 查找包含 cate-* 类名的子元素
+        // 2. 查找包含 cate-* 类名的子元素
         const cateElement = $element.find(selectors.categoryClass);
         if (cateElement.length > 0) {
           const cateClassList = cateElement.attr('class') || '';
@@ -354,27 +354,37 @@ export class WNACGScraper {
           if (cateMatch) {
             const cateId = cateMatch[1];
             category = this.getCategoryByCateId(cateId);
-            logger.info(`Found category via child element: ${category} (cate-${cateId})`);
+            logger.debug(`Found category via child element: ${category} (cate-${cateId})`);
           }
         }
       }
       
-      // 如果没有找到 cate-* 类名，尝试从标题中提取
+      // 3. 如果没有找到 cate-* 类名，尝试从标题、描述中提取
       if (!category) {
-        if (title.includes('漢化')) {
-          category = '漢化';
-          logger.info(`Found category via title: 漢化`);
+        // 获取整个元素的文本内容
+        const fullText = $element.text().toLowerCase();
+        
+        // 检查是否包含汉化相关关键词
+        if (title.includes('漢化') || title.includes('汉化') || 
+            fullText.includes('漢化') || fullText.includes('汉化') ||
+            fullText.includes('中国翻訳') || fullText.includes('中文') ||
+            fullText.includes('dl 版')) {
+          category = '單行本／漢化';
+          logger.debug(`Found category via text: 漢化`);
+        } else if (!onlyChinese) {
+          // 如果不要求只搜索汉化版，给一个默认分类
+          category = '未知分类';
         }
       }
       
-      // 确保分类中包含"漢化"字样
-      if (category && category.includes('漢化')) {
-        logger.info(`Confirmed Chinese category: ${category}`);
-      }
-
-      // 只搜索汉化版漫画
-      if (onlyChinese && !category.includes('漢化') && !title.includes('漢化')) {
-        return;
+      // 确保分类中包含"漢化"字样（如果要求只搜索汉化版）
+      if (onlyChinese) {
+        const isChinese = category.includes('漢化') || category.includes('汉化') || 
+                         title.includes('漢化') || title.includes('汉化');
+        if (!isChinese) {
+          logger.debug(`Skipping non-Chinese comic: ${title}`);
+          return;
+        }
       }
 
       // 查找封面图片
