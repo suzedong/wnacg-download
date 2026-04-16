@@ -1,4 +1,9 @@
-const { contextBridge, ipcRenderer } = require('electron');
+/**
+ * Electron 预加载脚本
+ * 在渲染进程和主进程之间建立安全的通信桥梁
+ */
+
+import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   searchComics: async (keyword: string) => {

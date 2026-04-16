@@ -1,6 +1,7 @@
-import { Comic, LocalComic, CompareResult } from '../types.js';
+import type { Comic, LocalComic, CompareResult } from '../types/index.js';
 import { ComicMatcher } from './ai/matcher.js';
 import winston from 'winston';
+import type { ICompareService } from './interfaces.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -14,7 +15,10 @@ const logger = winston.createLogger({
   ],
 });
 
-export class Comparer {
+/**
+ * 漫画对比器
+ */
+export class Comparer implements ICompareService {
   private matcher: ComicMatcher;
 
   constructor() {
@@ -29,7 +33,7 @@ export class Comparer {
     const alreadyHave: { website: Comic; local?: LocalComic }[] = [];
 
     // 使用 AI 匹配器进行匹配
-    const matchResults = this.matcher.matchComics(websiteComics, localComics);
+    const matchResults = await this.matcher.matchComics(websiteComics, localComics);
 
     matchResults.forEach(result => {
       if (result.matched) {

@@ -35,17 +35,21 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, inject } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 import SearchView from './views/SearchView.vue';
 import CompareView from './views/CompareView.vue';
 import DownloadView from './views/DownloadView.vue';
 import ConfigView from './views/ConfigView.vue';
+import { createClient } from './adapters';
 
 const activeTab = ref('search');
 const downloadQueue = ref([]);
 const isDownloading = ref(false);
+
+// 注入客户端实例（兼容直接导入）
+const client = inject('client') || createClient();
 
 const handleBack = () => {
 };
@@ -61,7 +65,7 @@ const handleAddToQueue = (comics) => {
 const handleDownloadComics = async (comics, storagePath) => {
   isDownloading.value = true;
   try {
-    const response = await window.electronAPI.downloadComics(comics, storagePath);
+    const response = await client.download(comics, { storagePath });
     alert(`下载完成！成功：${response.success.length}, 失败：${response.failed.length}`);
   } catch (error) {
     alert(`下载失败：${error.message}`);
@@ -73,7 +77,7 @@ const handleDownloadComics = async (comics, storagePath) => {
 const handleStartDownload = async (comics) => {
   isDownloading.value = true;
   try {
-    const response = await window.electronAPI.downloadComics(comics, '');
+    const response = await client.download(comics, { storagePath: '' });
     alert(`下载完成！成功：${response.success.length}, 失败：${response.failed.length}`);
     downloadQueue.value = [];
   } catch (error) {

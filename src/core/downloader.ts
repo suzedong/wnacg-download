@@ -1,11 +1,13 @@
 import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
-import { Comic, DownloadOptions, DownloadProgress, DownloadResult } from '../types.js';
+import type { Comic, DownloadOptions, DownloadProgress, DownloadResult } from '../types/index.js';
 import { wnacgConfig } from '../config/wnacg.config.js';
 import { configManager } from '../config.js';
 import winston from 'winston';
 import { WNACGScraper } from './scraper.js';
+import { DownloadEventEmitter } from './events.js';
+import type { IDownloadService, DownloadCompletedEvent, DownloadErrorEvent } from './interfaces.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -23,13 +25,14 @@ const logger = winston.createLogger({
  * 漫画下载器
  * 支持并发下载、断点续传、重试机制和进度追踪
  */
-export class Downloader {
+export class Downloader implements IDownloadService {
   private scraper: WNACGScraper;
   private storagePath: string;
   private concurrentDownloads: number;
   private retryTimes: number;
   private retryDelay: number;
   private progressListeners: Map<string, Set<(progress: DownloadProgress) => void>>;
+  private eventEmitter: DownloadEventEmitter;
 
   constructor(options: DownloadOptions) {
     this.storagePath = options.storagePath;
@@ -38,6 +41,7 @@ export class Downloader {
     this.retryDelay = options.retryInterval || configManager.get('downloadRetryDelay') || 30;
     this.scraper = new WNACGScraper(wnacgConfig, options.proxy);
     this.progressListeners = new Map();
+    this.eventEmitter = new DownloadEventEmitter();
   }
 
   /**
@@ -51,6 +55,13 @@ export class Downloader {
   }
 
   /**
+   * 注册事件监听器
+   */
+  on(event: 'start' | 'progress' | 'completed' | 'error' | 'cancelled' | 'retry', handler: any): void {
+    this.eventEmitter.on(event, handler);
+  }
+
+  /**
    * 通知进度更新
    */
   private notifyProgress(progress: DownloadProgress): void {
@@ -58,6 +69,16 @@ export class Downloader {
     if (listeners) {
       listeners.forEach(callback => callback(progress));
     }
+    
+    // 同时发射事件
+    this.eventEmitter.emitProgress({
+      aid: progress.aid,
+      total: progress.total,
+      downloaded: progress.downloaded,
+      speed: progress.speed,
+      status: progress.status,
+      error: progress.error,
+    });
   }
 
   /**
@@ -68,6 +89,9 @@ export class Downloader {
     const failed: string[] = [];
 
     await fs.promises.mkdir(this.storagePath, { recursive: true });
+
+    // 发射开始事件
+    this.eventEmitter.emitStart(comics.length);
 
     const batches = this.createBatches(comics, this.concurrentDownloads);
 
@@ -82,13 +106,39 @@ export class Downloader {
           const downloadResult = result.value;
           if (downloadResult.success) {
             success.push(comic.title);
+            
+            // 发射完成事件
+            const completedEvent: DownloadCompletedEvent = {
+              aid: comic.aid,
+              savedPath: downloadResult.savedPath!,
+              pages: downloadResult.pages,
+              downloadedPages: downloadResult.downloadedPages,
+            };
+            this.eventEmitter.emitCompleted(completedEvent);
+            
             logger.info(`✅ 下载完成：${comic.title}`);
           } else {
             failed.push(comic.title);
+            
+            // 发射错误事件
+            const errorEvent: DownloadErrorEvent = {
+              aid: comic.aid,
+              error: downloadResult.error || new Error('未知错误'),
+            };
+            this.eventEmitter.emitError(errorEvent);
+            
             logger.error(`❌ 下载失败：${comic.title} - ${downloadResult.error?.message}`);
           }
         } else {
           failed.push(comic.title);
+          
+          // 发射错误事件
+          const errorEvent: DownloadErrorEvent = {
+            aid: comic.aid,
+            error: new Error(result.reason),
+          };
+          this.eventEmitter.emitError(errorEvent);
+          
           logger.error(`❌ 下载异常：${comic.title} - ${result.reason}`);
         }
       });
@@ -133,6 +183,10 @@ export class Downloader {
         
         if (attempt < this.retryTimes) {
           const delayMs = this.retryDelay * 1000 * Math.pow(2, attempt - 1); // 指数退避
+          
+          // 发射重试事件
+          this.eventEmitter.emitRetry(comic.aid, attempt, delayMs);
+          
           logger.info(`等待 ${delayMs / 1000} 秒后重试...`);
           await this.delay(delayMs);
         }
@@ -343,6 +397,15 @@ export class Downloader {
       .replace(/\s+/g, ' ')
       .trim()
       .substring(0, 100);
+  }
+
+  /**
+   * 取消下载
+   */
+  async cancel(aid: string): Promise<void> {
+    // 发射取消事件
+    this.eventEmitter.emitCancelled(aid);
+    logger.info(`取消下载：${aid}`);
   }
 
   /**

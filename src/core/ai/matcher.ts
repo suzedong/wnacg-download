@@ -1,12 +1,6 @@
 import { modelManager } from './model.js';
-import type { Comic, LocalComic } from '../../types.js';
-
-interface MatchResult {
-  websiteComic: Comic;
-  localComic?: LocalComic;
-  similarity: number;
-  matched: boolean;
-}
+import type { Comic, LocalComic } from '../../types/index.js';
+import type { IAIMatcherService, MatchResult } from '../interfaces.js';
 
 interface MatcherOptions {
   threshold?: number;
@@ -15,7 +9,7 @@ interface MatcherOptions {
   cacheSize?: number;
 }
 
-export class ComicMatcher {
+export class ComicMatcher implements IAIMatcherService {
   private options: MatcherOptions;
   private similarityCache: Map<string, number>;
 
@@ -89,6 +83,18 @@ export class ComicMatcher {
     return `similarity:${sortedTitles}`;
   }
 
+  // 匹配两个漫画名称（接口要求的方法）
+  async match(title1: string, title2: string): Promise<number> {
+    return this.calculateSimilarity(title1, title2);
+  }
+
+  // 校准漫画名称（以第三方为准）（接口要求的方法）
+  calibrateName(searchName: string, thirdPartyName: string): string {
+    // 简单实现：返回第三方名称
+    // 可以根据需要实现更复杂的逻辑
+    return thirdPartyName;
+  }
+
   // 计算两个漫画名的相似度
   calculateSimilarity(title1: string, title2: string): number {
     // 检查缓存
@@ -150,7 +156,7 @@ export class ComicMatcher {
   }
 
   // 批量匹配漫画
-  matchComics(websiteComics: Comic[], localComics: LocalComic[]): MatchResult[] {
+  async matchComics(websiteComics: Comic[], localComics: LocalComic[]): Promise<MatchResult[]> {
     return websiteComics.map(websiteComic => this.matchComic(websiteComic, localComics));
   }
 

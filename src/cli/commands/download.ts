@@ -4,7 +4,7 @@ import ora from 'ora';
 import inquirer from 'inquirer';
 import figures from 'figures';
 import { WNACGScraper } from '../../core/scraper.js';
-import { LocalScanner } from '../../core/scanner.js';
+import { Scanner } from '../../core/scanner.js';
 import { Comparer } from '../../core/comparer.js';
 import { Downloader } from '../../core/downloader.js';
 import { configManager } from '../../config.js';
@@ -31,7 +31,7 @@ export const downloadCommand = new Command('download')
 
     const spinner = ora('初始化中...').start();
     const scraper = new WNACGScraper(wnacgConfig, options.proxy || configManager.get('defaultProxy'), false); // 默认使用非无头模式
-    const scanner = new LocalScanner();
+    const scanner = new Scanner();
     const comparer = new Comparer();
 
     try {

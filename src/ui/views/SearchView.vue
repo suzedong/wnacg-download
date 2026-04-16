@@ -64,11 +64,15 @@
 </template>
 
 <script setup>
-import { ref, defineEmits } from 'vue';
+import { ref, defineEmits, inject } from 'vue';
 import ComicCard from '../components/ComicCard.vue';
 import SearchResultList from '../components/SearchResultList.vue';
+import { createClient } from '../adapters';
 
 const emit = defineEmits(['add-to-queue', 'switch-tab']);
+
+// 注入客户端实例
+const client = inject('client') || createClient();
 
 const searchKeyword = ref('');
 const comicsList = ref([]);
@@ -86,7 +90,7 @@ const performSearch = async () => {
   selectedComics.value = [];
   
   try {
-    const response = await window.electronAPI.searchComics(searchKeyword.value);
+    const response = await client.search(searchKeyword.value);
     comicsList.value = response;
   } catch (error) {
     searchError.value = error.message;

@@ -1,7 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { LocalComic } from '../types.js';
+import type { LocalComic } from '../types/index.js';
 import winston from 'winston';
+import type { IScannerService } from './interfaces.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -15,7 +16,10 @@ const logger = winston.createLogger({
   ],
 });
 
-export class LocalScanner {
+/**
+ * 本地漫画扫描器
+ */
+export class Scanner implements IScannerService {
   async scanDirectory(dirPath: string): Promise<LocalComic[]> {
     const comics: LocalComic[] = [];
 

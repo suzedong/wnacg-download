@@ -1,8 +1,9 @@
 import { chromium, Browser, Page } from 'playwright';
 import * as cheerio from 'cheerio';
-import { Comic, SearchOptions } from '../types.js';
+import type { Comic, SearchOptions } from '../types/index.js';
 import { SiteConfig } from '../types/config.js';
 import winston from 'winston';
+import type { ISearchService } from './interfaces.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -16,7 +17,7 @@ const logger = winston.createLogger({
   ],
 });
 
-export class WNACGScraper {
+export class WNACGScraper implements ISearchService {
   private browser: Browser | null = null;
   private page: Page | null = null;
   private proxy?: string;

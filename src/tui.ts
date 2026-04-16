@@ -2,7 +2,7 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 import figures from 'figures';
 import { WNACGScraper } from './core/scraper.js';
-import { LocalScanner } from './core/scanner.js';
+import { Scanner } from './core/scanner.js';
 import { Comparer } from './core/comparer.js';
 import { Downloader } from './core/downloader.js';
 import { configManager } from './config.js';
@@ -135,7 +135,7 @@ async function compareFlow(): Promise<void> {
 
   console.log('\n');
   const scraper = new WNACGScraper(wnacgConfig, configManager.get('defaultProxy'));
-  const scanner = new LocalScanner();
+  const scanner = new Scanner();
   const comparer = new Comparer();
 
   try {
@@ -196,7 +196,7 @@ async function downloadFlow(): Promise<void> {
 
   console.log('\n');
   const scraper = new WNACGScraper(wnacgConfig, configManager.get('defaultProxy'));
-  const scanner = new LocalScanner();
+  const scanner = new Scanner();
   const comparer = new Comparer();
   const downloader = new Downloader({
     storagePath: scanPath,
