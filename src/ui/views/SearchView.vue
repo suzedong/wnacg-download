@@ -103,21 +103,43 @@ const showSearchResultList = () => {
   showList.value = true;
 };
 
-const handleSearchResultSelect = (result) => {
-  // 使用选中的搜索结果
+const handleSearchResultSelect = async (result) => {
+  // 使用选中的搜索结果加载漫画列表
   console.log('使用搜索结果:', result);
   showList.value = false;
-  // TODO: 加载该搜索结果的详情
+  
+  try {
+    // 重新搜索以加载该关键字的漫画
+    searchKeyword.value = result.keyword;
+    isSearching.value = true;
+    searchError.value = '';
+    comicsList.value = [];
+    selectedComics.value = [];
+    
+    const response = await client.search(result.keyword);
+    comicsList.value = response;
+  } catch (error) {
+    searchError.value = error.message;
+  } finally {
+    isSearching.value = false;
+  }
 };
 
 const handleViewDetail = (result) => {
+  // 查看搜索结果详情（目前直接加载）
   console.log('查看详情:', result);
-  // TODO: 显示搜索结果详情
+  handleSearchResultSelect(result);
 };
 
-const handleDelete = (result) => {
+const handleDelete = async (result) => {
+  // 删除搜索结果缓存
   console.log('删除结果:', result);
-  // 删除后可能需要刷新当前显示
+  try {
+    await client.deleteCache(result.keyword);
+    console.log('已删除缓存:', result.keyword);
+  } catch (error) {
+    console.error('删除失败:', error);
+  }
 };
 
 const handleComicSelect = (comic) => {

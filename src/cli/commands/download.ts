@@ -102,6 +102,8 @@ ${chalk.green('✓')} 漫画信息已保存到：${chalk.cyan(cacheFile)}`);
         storagePath: scanPath,
         proxy: options.proxy || configManager.get('defaultProxy'),
         concurrentDownloads: configManager.get('concurrentDownloads'),
+        retryTimes: configManager.get('downloadRetryTimes'),
+        retryInterval: configManager.get('downloadRetryDelay'),
       });
 
       const result = await downloader.downloadComics(comicsToDownload);

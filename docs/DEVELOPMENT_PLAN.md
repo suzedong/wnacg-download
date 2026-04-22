@@ -32,19 +32,19 @@
 - ✅ 智能对比本地已有漫画避免重复
 - ✅ AI 智能匹配漫画名称（准确率 > 90%）
 - ✅ 支持断点续传和并发下载
-- ✅ **CLI、Web、Electron 三种交互方式**
+- ✅ **CLI、Web、Tauri 三种交互方式**
 - ✅ 核心业务逻辑完全复用
-- ✅ **Web 和 Electron 共享 UI 组件（复用率 > 95%）**
+- ✅ **Web 和 Tauri 共享 UI 组件（复用率 > 95%）**
 
 ### 开发原则
 
-**核心理念**: CLI、Web、Electron 复用同一套业务逻辑，只是交互方式不同。
+**核心理念**: CLI、Web、Tauri 复用同一套业务逻辑，只是交互方式不同。
 
 ```
 ┌─────────────────────────────────────────┐
 │         表现层 (三种交互方式)            │
 │  ┌─────────┐  ┌─────────┐  ┌─────────┐ │
-│  │   CLI   │  │   Web   │  │ Electron │ │
+│  │   CLI   │  │   Web   │  │  Tauri   │ │
 │  └─────────  └─────────┘  └─────────┘ │
 └─────────────────────────────────────────┘
               ↓ 复用 ↓
@@ -57,9 +57,9 @@
 ```
 
 **架构升级**:
-- **三架构设计**：CLI + Web + Electron
-- **UI 复用**：Web 和 Electron 共享 Vue 组件
-- **适配器模式**：统一通信接口（HTTP vs IPC）
+- **三架构设计**：CLI + Web + Tauri
+- **UI 复用**：Web 和 Tauri 共享 Vue 组件
+- **适配器模式**：统一通信接口（HTTP vs Tauri Commands）
 - **配置共享**：使用 conf 库统一管理
 
 ---
@@ -72,8 +72,8 @@
 ┌─────────────────────────────────────────────────────────┐
 │                   表现层                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  CLI 命令行  │  │  Web 应用    │  │ Electron    │    │
-│  │  (src/cli)  │  │  (src/web)  │  │  (src/ui)   │    │
+│  │  CLI 命令行  │  │  Web 应用    │  │  Tauri      │    │
+│  │  (src/cli)  │  │  (src/web)  │  │ (src-tauri) │    │
 │  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘    │
 └─────────┼────────────────┼────────────────┼────────────┘
           │                │                │
@@ -104,7 +104,7 @@
 
 **技术栈**：
 - 后端：Express.js（提供 RESTful API）
-- 前端：Vue 3 + Vite（与 Electron 共享 UI）
+- 前端：Vue 3 + Vite（与 Tauri 共享 UI）
 - 通信：HTTP API（Fetch API）
 - 部署：Node.js 直接运行
 
@@ -125,7 +125,7 @@ src/web/
 ### 新增：UI 共享架构
 
 **设计原则**：
-- Web 和 Electron 共享同一套 Vue 组件
+- Web 和 Tauri 共享同一套 Vue 组件
 - 通过适配器模式处理通信差异
 - 代码复用率 > 95%
 
@@ -137,7 +137,7 @@ src/ui/
 ├── composables/           # 组合式函数（共享逻辑）
 ├── adapters/              # 适配器层（统一接口）
 │   ├── api-client.ts      # Web API 客户端
-│   └── electron-client.ts # Electron IPC 客户端
+│   └── tauri-client.ts    # Tauri IPC 客户端
 └── main.ts                # Web 入口
 ```
 
@@ -146,8 +146,8 @@ src/ui/
 # Web 开发模式
 npm run dev:web
 
-# Electron 开发模式
-npm run dev:electron
+# Tauri 开发模式
+npm run dev:tauri
 ```
 
 ### 组件层级结构
@@ -380,7 +380,7 @@ export const ErrorCodes = {
 - 抽象核心模块的统一接口
 - 支持同步和异步调用
 - 支持事件通知（进度、完成等）
-- 为 Web 和 Electron 提供统一的调用接口
+- 为 Web 和 Tauri 提供统一的调用接口
 
 **关键接口**:
 ```typescript
@@ -447,7 +447,7 @@ export class ComicDownloader extends EventEmitter implements IDownloadService {
 - [ ] 接口定义完整
 - [ ] CLI 可以直接调用
 - [ ] Web API 可以封装调用
-- [ ] Electron IPC 可以封装调用
+- [ ] Tauri Commands 可以封装调用
 - [ ] TypeScript 编译无错误
 
 ---
@@ -489,7 +489,7 @@ export class DownloadEvent {
 
 **使用示例**:
 ```typescript
-// Web/Electron 监听事件
+// Web/Tauri 监听事件
 downloader.on('progress', (event: ProgressEvent) => {
   updateUI({
     aid: event.aid,
@@ -510,7 +510,7 @@ downloader.on('error', (error: Error) => {
 **验收标准**:
 - [ ] 事件系统工作正常
 - [ ] Web 可以监听进度事件
-- [ ] Electron 可以监听进度事件
+- [ ] Tauri 可以监听进度事件
 - [ ] CLI 可以显示进度
 - [ ] 支持事件取消
 - [ ] 支持错误处理
@@ -891,7 +891,7 @@ src/web/
 **功能**:
 - ✅ 创建适配器接口定义（ISearchClient, IDownloadClient）
 - ✅ 实现 Web API 客户端（ApiClient）
-- ✅ 实现 Electron IPC 客户端（ElectronClient）
+- ✅ 实现 Tauri IPC 客户端（TauriClient）
 - ✅ 创建工厂函数（createClient）
 - ✅ 环境检测（自动选择合适的客户端）
 
@@ -900,14 +900,14 @@ src/web/
 src/ui/adapters/
 ├── types.ts               # 接口定义
 ├── api-client.ts          # Web API 客户端
-├── electron-client.ts     # Electron IPC 客户端
+├── tauri-client.ts        # Tauri IPC 客户端
 └── index.ts               # 工厂函数
 ```
 
 **验收标准**:
 - [ ] 接口定义完整
 - [ ] Web 客户端调用 HTTP API 正常
-- [ ] Electron 客户端调用 IPC 正常
+- [ ] Tauri 客户端调用 Commands 正常
 - [ ] 工厂函数自动检测环境
 - [ ] UI 组件无感知通信方式
 
@@ -957,7 +957,7 @@ src/ui/adapters/
 - [ ] 覆盖确认机制正常
 - [ ] CLI --list 参数正常
 - [ ] **Web API 服务器正常 ⭐ 新增**
-- [ ] **Web 和 Electron 共享 UI 正常 ⭐ 新增**
+- [ ] **Web 和 Tauri 共享 UI 正常 ⭐ 新增**
 - [ ] **适配器模式工作正常 ⭐ 新增**
 
 #### 性能
@@ -970,7 +970,7 @@ src/ui/adapters/
 - [ ] 过滤响应及时
 - [ ] 错误提示友好
 - [ ] 快捷键支持（Ctrl+1~4）
-- [ ] **Web 和 Electron 界面一致 ⭐ 新增**
+- [ ] **Web 和 Tauri 界面一致 ⭐ 新增**
 
 ---
 
@@ -1428,10 +1428,327 @@ Week 8:   Phase 5 - 配置管理 + Web 配置实现 ⭐
     ↓ 统一配置管理
     ↓ Web 配置功能完成
 
-Week 9:   集成与测试（CLI + Web + Electron）⭐
+Week 9:   集成与测试（CLI + Web + Tauri）⭐
     ↓ 三架构完整验证
     ↓ 跨架构测试
+
+Week 10+:  Tauri 增强功能（可选）⭐
+    ↓ Phase 2：系统托盘 + 原生通知
+    ↓ Phase 3：自动更新等高级功能
 ```
+
+---
+
+## Tauri 特有功能开发计划 ⭐ 新增
+
+### Tauri Phase 1（MVP）- 已确认
+
+**时间**：Week 1-9（与其他 Phase 并行）
+
+**目标**：快速完成核心功能，验证架构
+
+**必须实现**：
+- ✅ 基础窗口（Tauri 默认窗口）
+- ✅ Rust 启动 Node.js 服务
+- ✅ Tauri Commands 调用 Node.js API
+- ✅ 事件推送（下载进度等）
+- ✅ 文件系统访问（下载文件）
+
+**暂不实现**：
+- ❌ 系统托盘
+- ❌ 原生通知
+- ❌ 自动更新
+- ❌ 全局快捷键
+- ❌ 文件拖拽
+
+### Tauri Phase 2（增强版）- 后续迭代
+
+**时间**：Week 10-11（可选）
+
+**目标**：提升用户体验
+
+**计划功能**：
+- ✅ **系统托盘**（优先级 P1）
+  - 托盘图标显示
+  - 右键菜单（开始下载、暂停、设置、退出）
+  - 点击图标打开/最小化窗口
+  - 开发时间：2-3 天
+- ✅ **原生通知**（优先级 P1）
+  - 下载完成通知
+  - 下载失败通知
+  - 点击通知跳转
+  - 开发时间：1 天
+
+**验收标准**：
+- [ ] 系统托盘正常工作
+- [ ] 右键菜单响应正常
+- [ ] 原生通知显示正常
+- [ ] 点击通知跳转正常
+
+### Tauri Phase 3（完整版）- 根据用户反馈决定
+
+**时间**：Week 12+（可选，根据用户反馈）
+
+**目标**：完善高级功能
+
+**候选功能**：
+- ⚠️ **自动更新**（优先级 P2，需要更新服务器）
+  - 使用 Tauri Updater
+  - 支持静默更新和用户确认
+  - 开发时间：3-5 天
+- ⚠️ **全局快捷键**（优先级 P2，可能冲突）
+  - 全局快捷键打开/关闭窗口
+  - 全局快捷键开始新搜索
+  - 开发时间：2 天
+- ⚠️ **文件拖拽**（优先级 P2，使用频率待验证）
+  - 拖拽文本文件解析下载链接
+  - 拖拽图片识别漫画
+  - 开发时间：1 天
+
+**决策标准**：
+- 用户反馈强烈需求
+- 核心功能稳定
+- 有足够开发资源
+
+---
+
+## 打包和分发策略 ⭐ 新增
+
+### Phase 1（MVP）打包策略
+
+**目标**：零成本快速发布 MVP，验证需求
+
+#### 安装包格式
+
+**Windows**：
+- **格式**：`.exe` (NSIS)
+- **优点**：
+  - 安装快速，支持卸载
+  - 用户熟悉
+- **缺点**：
+  - 用户看到"未知发布者"警告
+- **文件大小**：约 80MB
+
+**macOS**：
+- **格式**：`.dmg`
+- **优点**：
+  - macOS 标准格式
+  - 用户熟悉（拖拽安装）
+- **缺点**：
+  - 用户需手动允许运行（系统偏好设置 → 安全性）
+- **文件大小**：约 80MB
+
+**Linux**（后续考虑）：
+- **格式**：`.AppImage` + `.deb`
+- **优点**：
+  - `.AppImage`：通用格式，无需安装
+  - `.deb`：Debian/Ubuntu 标准格式
+- **缺点**：
+  - 用户群体较小
+
+#### 代码签名策略
+
+**Phase 1：不签名** ✅ 已确认
+
+**Windows**：
+- **状态**：❌ 不签名（$0）
+- **用户警告**：
+  ```
+  ⚠️ Windows Defender SmartScreen 警告
+  "未知发布者应用可能被阻止"
+  
+  解决方案：
+  1. 点击"更多信息"
+  2. 点击"仍要运行"
+  ```
+- **影响**：
+  - ✅ 零成本
+  - ⚠️ 用户看到警告（可能影响下载意愿）
+  - ⚠️ 企业用户可能无法安装（组策略限制）
+
+**macOS**：
+- **状态**：❌ 不签名（$0）
+- **用户警告**：
+  ```
+  ⚠️ macOS 安全警告
+  "无法打开应用，因为无法验证开发者"
+  
+  解决方案：
+  1. 系统偏好设置 → 安全性与隐私
+  2. 点击"仍要打开"
+  3. 或右键点击应用 → 打开
+  ```
+- **影响**：
+  - ✅ 零成本
+  - ⚠️ 用户需手动允许（增加使用门槛）
+
+**Linux**：
+- **状态**：✅ 不需要签名
+
+#### Phase 2（正式版）签名策略（后续考虑）
+
+**Windows**：
+- **EV 证书**：$200-400/年
+- **优点**：消除 SmartScreen 警告，提升用户信任
+- **决策时机**：用户量增长，收到较多警告反馈时
+
+**macOS**：
+- **Apple Developer 证书**：$99/年
+- **公证（Notarization）**：免费（需要开发者账号）
+- **优点**：消除安全警告，可发布到 App Store
+- **决策时机**：macOS 用户量增长时
+
+#### 成本估算
+
+| 项目 | Phase 1 | Phase 2 | 说明 |
+|------|---------|---------|------|
+| **Windows 证书** | $0 | $200-400/年 | 初期不签名 |
+| **macOS 证书** | $0 | $99/年 | 初期不签名 |
+| **GitHub Actions** | $0 | $0 | 开源项目免费 |
+| **总计** | **$0/年** | **$299-499/年** | |
+
+---
+
+### GitHub Actions 自动构建
+
+#### 工作流配置
+
+**文件**：`.github/workflows/release.yml`
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # 推送版本标签时触发
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        platform: [windows-latest, macos-latest]
+    
+    runs-on: ${{ matrix.platform }}
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Install dependencies
+        run: pnpm install
+      
+      - name: Build Tauri
+        run: pnpm run build:tauri
+      
+      - name: Upload Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: src-tauri/target/release/bundle/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+#### 发布流程
+
+**1. 准备发布**：
+```bash
+# 1. 更新版本号
+# package.json: "version": "1.0.0"
+# src-tauri/tauri.conf.json: "version": "1.0.0"
+
+# 2. 提交并打标签
+git commit -m "release: v1.0.0"
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+**2. 自动构建**：
+- GitHub Actions 自动触发
+- 构建 Windows 和 macOS 版本
+- 上传到 GitHub Releases
+
+**3. 发布说明**：
+```markdown
+## v1.0.0 (2026-04-21)
+
+### 新功能
+- ✅ 搜索漫画
+- ✅ 对比本地漫画
+- ✅ 批量下载
+- ✅ Tauri 桌面客户端
+
+### 已知问题
+- ⚠️ Windows：首次运行会显示 SmartScreen 警告
+  解决方案：点击"更多信息" → "仍要运行"
+- ⚠️ macOS：首次运行需手动允许
+  解决方案：系统偏好设置 → 安全性 → "仍要打开"
+
+### 下载
+- Windows: wnacg-downloader-setup.exe (80MB)
+- macOS: wnacg-downloader.dmg (80MB)
+```
+
+---
+
+### 用户使用说明
+
+#### Windows 用户
+
+**安装步骤**：
+1. 下载 `wnacg-downloader-setup.exe`
+2. 运行安装程序
+3. 如果看到 SmartScreen 警告：
+   - 点击"更多信息"
+   - 点击"仍要运行"
+4. 完成安装
+
+**首次运行**：
+1. 双击桌面快捷方式
+2. 开始使用
+
+---
+
+#### macOS 用户
+
+**安装步骤**：
+1. 下载 `wnacg-downloader.dmg`
+2. 双击打开 DMG 文件
+3. 拖拽应用到"应用程序"文件夹
+
+**首次运行**：
+1. 打开"系统偏好设置" → "安全性与隐私"
+2. 点击"仍要打开"
+3. 或右键点击应用 → "打开" → "打开"
+4. 开始使用
+
+---
+
+### 验收标准
+
+**Phase 1 打包验收**：
+- [ ] Windows 安装包可正常安装
+- [ ] macOS DMG 可正常拖拽安装
+- [ ] 应用可正常启动
+- [ ] 核心功能正常工作
+- [ ] GitHub Actions 自动构建成功
+- [ ] GitHub Releases 包含所有安装包
+- [ ] 用户警告处理说明完整
+
+**Phase 2 签名验收**（后续）：
+- [ ] Windows 无 SmartScreen 警告
+- [ ] macOS 无需手动允许
+- [ ] 证书有效且未过期
 
 ---
 
@@ -1445,7 +1762,7 @@ Week 9:   集成与测试（CLI + Web + Electron）⭐
 | AI 匹配准确率 | 中 | 中 | 使用多种匹配算法，支持人工确认 |
 | 下载失败 | 中 | 中 | 重试机制，断点续传 |
 | 并发控制失效 | 高 | 低 | 信号量严格控制，单元测试验证 |
-| **Web/Electron 代码不同步** | 高 | 中 | 强制共享 + 自动化测试 |
+| **Web/Tauri 代码不同步** | 高 | 中 | 强制共享 + 自动化测试 |
 | **适配器模式复杂度** | 中 | 中 | 详细文档 + 代码审查 |
 | **端口冲突** | 中 | 低 | 端口检测 + 自动切换 |
 | **CORS 问题** | 中 | 中 | 统一中间件 + 白名单 |
@@ -1529,15 +1846,15 @@ Week 9:   集成与测试（CLI + Web + Electron）⭐
 
 ### 跨架构测试
 ```
-1. CLI 搜索 → Web 对比 → Electron 下载
+1. CLI 搜索 → Web 对比 → Tauri 下载
    # Step 1: CLI 搜索
    wnacg-dl search TYPE90
    
    # Step 2: Web 对比
    访问 Web，选择搜索缓存，进行对比
    
-   # Step 3: Electron 下载
-   在 Electron 中查看对比结果，开始下载
+   # Step 3: Tauri 下载
+   在 Tauri 中查看对比结果，开始下载
 
 2. 配置同步测试
    # Step 1: CLI 设置代理
@@ -1546,8 +1863,8 @@ Week 9:   集成与测试（CLI + Web + Electron）⭐
    # Step 2: Web 验证
    访问 Web 配置页面，验证代理设置
    
-   # Step 3: Electron 验证
-   打开 Electron，验证代理设置
+   # Step 3: Tauri 验证
+   打开 Tauri，验证代理设置
 ```
 
 ### 自动化测试

@@ -16,9 +16,9 @@
 ### 1. 文档驱动开发
 
 **开发前**：
-1. 阅读 `DEVELOPMENT_PLAN.md` - 了解当前要开发的任务
-2. 阅读 `requirements/spec.md` - 理解功能需求
-3. 阅读 `architecture/spec.md` - 理解架构设计
+1. 阅读 `docs/DEVELOPMENT_PLAN.md` - 了解当前要开发的任务
+2. 阅读 `docs/REQUIREMENTS.md` - 理解功能需求
+3. 阅读 `docs/ARCHITECTURE.md` - 理解架构设计
 4. 对照验收标准 - 明确完成标准
 
 **开发中**：
@@ -127,7 +127,7 @@ const emit = defineEmits(['select', 'download']);
 ## UI 设计规范
 
 ### 设计原则
-- 遵循 [`ui-design/spec.md`](../specs/ui-design/spec.md) 中的设计稿
+- 遵循 [`docs/UI-DESIGN.md`](../docs/UI-DESIGN.md) 中的设计稿
 - 保持界面一致性
 - 响应式布局
 - **Web 和 Electron 共享 UI 组件**
@@ -321,12 +321,12 @@ alert('Download complete!');
 
 | 文档 | 用途 | 路径 |
 |------|------|------|
-| **项目规则** | 项目概述、功能规则、AI 要求 | `rules/bss-rules.md` |
-| **开发规范** | 本文档 | `rules/dev-rules.md` |
-| **需求规格** | 功能需求详细描述 | `specs/requirements/spec.md` |
-| **架构设计** | 技术实现方案 | `specs/architecture/spec.md` |
-| **界面设计** | UI 设计、共享策略、适配器模式 | `specs/ui-design/spec.md` |
-| **开发计划** | 任务清单和验收标准 | `specs/DEVELOPMENT_PLAN.md` |
+| **项目规则** | 项目概述、功能规则、AI 要求 | `bss-rules.md` |
+| **开发规范** | 本文档 | `dev-rules.md` |
+| **需求规格** | 功能需求详细描述 | `docs/REQUIREMENTS.md` |
+| **架构设计** | 技术实现方案 | `docs/ARCHITECTURE.md` |
+| **界面设计** | UI 设计、共享策略、适配器模式 | `docs/UI-DESIGN.md` |
+| **开发计划** | 任务清单和验收标准 | `docs/DEVELOPMENT_PLAN.md` |
 
 ---
 

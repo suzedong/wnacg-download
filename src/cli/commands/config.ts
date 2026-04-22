@@ -5,11 +5,18 @@ import figures from 'figures';
 import { configManager } from '../../config.js';
 
 function parseValue(key: string, value: string): any {
-  if (key === 'defaultMaxPages' || key === 'requestDelay' || key === 'concurrentDownloads') {
+  const numberKeys = ['defaultMaxPages', 'requestDelay', 'concurrentDownloads', 'downloadRetryTimes', 'downloadRetryDelay'];
+  if (numberKeys.includes(key)) {
     return parseInt(value, 10);
   }
   if (key === 'defaultOnlyChinese') {
     return value === 'true';
+  }
+  if (key === 'matchThreshold') {
+    return parseFloat(value);
+  }
+  if (key === 'aiModelType' && !['local', 'remote'].includes(value)) {
+    throw new Error('aiModelType 必须是 local 或 remote');
   }
   if (value === 'undefined' || value === '') {
     return undefined;
@@ -62,7 +69,11 @@ export const configCommand = new Command('config')
         'defaultOnlyChinese',
         'requestDelay',
         'concurrentDownloads',
-        'cacheTTL',
+        'downloadRetryTimes',
+        'downloadRetryDelay',
+        'aiModelType',
+        'aiModelApiUrl',
+        'matchThreshold',
       ];
       if (!validKeys.includes(key)) {
         console.error(chalk.red(`无效的配置项。有效的配置项：${validKeys.join(', ')}`));

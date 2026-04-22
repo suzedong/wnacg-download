@@ -14,6 +14,8 @@
     "lint": "eslint src --ext .ts",
     "test": "vitest",
     "dev:ui": "vite",
+    "dev:api": "tsx src/api-server.ts",
+    "dev:web": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
     "build:ui": "vite build",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && tsc -p tsconfig.preload.json && electron .\"",
     "electron:dev": "npm run build && electron .",

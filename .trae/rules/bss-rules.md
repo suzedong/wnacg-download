@@ -13,9 +13,9 @@
 **架构特点**：
 - CLI：命令行工具，支持脚本化
 - Web：浏览器访问，跨平台
-- Electron：桌面应用，原生体验
+- Tauri 2：桌面应用，原生体验（Rust 后端）
 - 核心业务逻辑完全复用
-- Web 和 Electron 共享 UI 组件（复用率 > 95%）
+- Web 和 Tauri 共享 UI 组件（复用率 > 95%）
 
 ---
 
@@ -104,18 +104,18 @@
 
 ### 配置存储
 - **使用 conf 库默认路径**（用户数据目录）
-- 符合 Electron 应用规范
+- 符合 Tauri 应用规范
 - 用户数据和应用分离
 
 ---
 
 ## 核心设计理念
 
-- **CLI、Web、Electron 复用同一套业务逻辑**
+- **CLI、Web、Tauri 复用同一套业务逻辑**
 - 核心模块：`src/core/`（scraper, downloader, scanner, comparer, ai）
-- **Web 和 Electron 共享 UI 组件**：`src/ui/`
-- **适配器模式**：统一通信接口（HTTP vs IPC）
-- CLI、Web、Electron 只是交互方式不同
+- **Web 和 Tauri 共享 UI 组件**：`src/ui/`
+- **适配器模式**：统一通信接口（HTTP vs Tauri Commands）
+- CLI、Web、Tauri 只是交互方式不同
 
 ---
 

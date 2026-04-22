@@ -4,13 +4,62 @@
 
 本文档用图形化方式展示 WNACG Downloader 的界面设计结构，包括：
 - **Web 应用**（Express + Vue 3）
-- **桌面客户端**（Electron + Vue 3）
+- **桌面客户端**（Tauri 2 + Vue 3）⏸️ 已搁置
 - **CLI 工具**（命令行界面 + 交互式 TUI）
 
 **设计原则**：
-- ✅ **Web 和 Electron 共享同一套 UI 组件**
-- ✅ **适配器模式统一通信接口**
-- ✅ **代码复用率 > 95%**
+- ✅ **Web 和 Tauri 共享同一套 UI 组件**（设计目标）
+- ✅ **适配器模式统一通信接口**（设计目标）
+- ✅ **代码复用率 > 95%**（设计目标）
+- ✅ **轻量级**（无 UI 库依赖，所有组件自研）
+- ✅ **紫色主题**（#667eea → #764ba2）
+- ✅ **桌面优先**（基础响应式 ≥ 768px）
+
+**当前阶段策略**：
+- ⏸️ **Tauri 已搁置**（Phase 1-5 完成后考虑）
+- 🎯 **专注 Web + CLI**（当前开发重点）
+- 📋 **设计保持完整**（为未来 Tauri 开发预留）
+
+---
+
+## 📋 设计决策记录（2026-04-21 确认）
+
+| 序号 | 问题 | 决策 | 备注 |
+|------|------|------|------|
+| 1 | 三架构策略 | 搁置 Tauri，专注 Web + CLI | 设计保持完整 |
+| 2 | Web 部署方式 | 前后端一体化（Express 统一提供） | 当前实现 |
+| 3 | 服务器启动 | 统一使用 Express 作为主服务器（端口 3000） | 当前实现 |
+| 4 | 配色主题 | 保持紫色渐变主题（#667eea → #764ba2） | 通用 |
+| 5 | 响应式范围 | 基础响应式（≥ 768px，支持桌面和平板） | 通用 |
+| 6 | 加载动画 | 分阶段实现（先核心后完善） | 通用 |
+| 7 | 通知系统 | 自研轻量级组件 | 通用 |
+| 8 | 空状态设计 | Emoji/图标 + 文字 | 通用 |
+| 9 | 表单控件 | 原生 HTML + 自定义样式 | 通用 |
+| 10 | 快捷键 | 分阶段实现（Enter/Esc → 页面切换 → 其他） | 通用 |
+| 11 | 组件库 | 完全不使用，所有组件自己写 | 通用 |
+| 12 | 弹窗设计 | 混合方案（重要用 Modal，一般用 Toast） | 通用 |
+| 13 | Electron vs Tauri | 坚持用 Tauri（Rust 后端） | 设计目标 |
+| 14 | Tauri 启动方式 | Rust 调用 Node.js 子进程 | 设计目标 |
+| 15 | 缓存管理 | 手动管理策略（提供清空缓存按钮） | 通用 |
+| 16 | 下载目录 | 自定义目录结构（支持变量模板） | 通用 |
+| 17 | AI 匹配 | 默认启用 AI 匹配（用户无感知） | 通用 |
+| 18 | 错误提示 | 场景化策略（操作前/中/后区分） | 通用 |
+| 19 | 搜索历史 | **不保存搜索历史** | 通用 |
+| 20 | 批量操作确认 | 按操作类型区分（添加不确认/删除确认/大批量确认） | 通用 |
+
+**核心设计原则**：
+1. **轻量级**：无 UI 库依赖、所有组件自研、原生表单、自研通知
+2. **简洁实用**：优先保证功能、体验优化分阶段、基础响应式
+3. **紫色主题**：符合二次元/漫画应用调性
+4. **桌面优先**：支持桌面和平板（≥ 768px）
+5. **渐进式开发**：核心功能优先、体验优化后续
+6. **设计完整性**：Tauri 设计保持完整，为未来预留
+
+**开发影响**：
+- 开发工作量减少约 30%（搁置 Tauri 开发）
+- 设计工作量不变（保持完整设计）
+- 技术栈简化：当前实现 Express/Vue3/TypeScript，Tauri 设计保留
+- 所有 UI 组件自己实现（Button、Input、Modal、Toast 等）
 
 ---
 
@@ -22,15 +71,18 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                    表现层（三端）                                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐            │
-│  │  CLI (TUI)  │  │  Web (Vue)  │  │ Electron    │            │
+│  │  CLI (TUI)  │  │  Web (Vue)  │  │  Tauri 2    │            │
 │  │  Inquirer   │  │  Vite       │  │ Vite +      │            │
-│  │             │  │             │ │ Electron     │            │
+│  │             │  │             │ │ Tauri        │            │
 │  └─────────────┘  └─────────────┘  └─────────────┘            │
+│                                                                 │
+│  当前阶段：专注 Web + CLI                                       │
+│  未来规划：添加 Tauri 客户端（共享 UI 组件）                     │
 └─────────────────────────────────────────────────────────────────┘
                          ▲
                          │ 共享
 ┌─────────────────────────────────────────────────────────────────┐
-│              UI 组件层（Web 和 Electron 共享）                    │
+│              UI 组件层（Web 和 Tauri 共享）                      │
 │  ┌─────────────────────────────────────────────────────────┐  │
 │  │  src/ui/                                                 │  │
 │  │  ├── components/        # 可复用组件                      │  │
@@ -50,11 +102,17 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 1.2 适配器模式设计
+**说明**：
+- ✅ **Web 和 Tauri 共享同一套 UI 组件**（设计目标，复用率 > 95%）
+- ✅ **核心业务逻辑三端共享**（当前实现）
+- ⏸️ **Tauri 客户端已搁置**（Phase 1-5 完成后开发）
+- 📋 **设计保持完整**（为未来 Tauri 开发预留）
 
-**Web 和 Electron 的通信方式不同**：
+### 1.2 适配器模式设计（Web 和 Tauri 共享）
+
+**Web 和 Tauri 的通信方式不同**：
 - Web：通过 HTTP API 与 Express 服务器通信
-- Electron：通过 IPC 与 Electron 主进程通信
+- Tauri：通过 Tauri Commands 与 Rust 后端通信（Rust 调用 Node.js 子进程）
 
 **解决方案**：使用适配器模式抽象统一接口
 
@@ -75,10 +133,10 @@
 │  └─────────────────────────────────────────────────────────┘  │
 │                                                                 │
 │  ┌─────────────────┐           ┌─────────────────┐            │
-│  │  ApiClient      │           │ ElectronClient  │            │
-│  │  (Web 专用)      │           │ (Electron 专用)  │            │
+│  │  ApiClient      │           │  TauriClient    │            │
+│  │  (Web 专用)      │           │ (Tauri 专用)     │            │
 │  │                 │           │                 │            │
-│  │  fetch('/api')  │           │ electronAPI.    │            │
+│  │  fetch('/api')  │           │ invoke()        │            │
 │  │                 │           │                 │            │
 │  └─────────────────┘           └─────────────────┘            │
 └─────────────────────────────────────────────────────────────────┘
@@ -107,11 +165,13 @@ export class ApiClient implements ISearchClient {
   }
 }
 
-// 3. Electron 实现
-// src/ui/adapters/electron-client.ts
-export class ElectronClient implements ISearchClient {
+// 3. Tauri 实现（未来）
+// src/ui/adapters/tauri-client.ts
+import { invoke } from '@tauri-apps/api/core';
+
+export class TauriClient implements ISearchClient {
   async search(keyword: string, options: SearchOptions): Promise<Comic[]> {
-    return window.electronAPI.searchComics(keyword, options);
+    return invoke('search_comics', { keyword, options });
   }
 }
 
@@ -131,7 +191,73 @@ const performSearch = async () => {
 
 **优势**：
 - ✅ UI 组件完全无感知通信方式
-- ✅ Web 和 Electron 代码复用率 > 95%
+- ✅ Web 和 Tauri 代码复用率 > 95%
+- ✅ 易于测试（可以 Mock 客户端）
+- ✅ 易于扩展（新增客户端实现即可）
+
+---
+
+### 1.3 Web 应用架构（当前阶段）
+
+**前后端一体化设计**：
+- 前端：Vue 3 + Vite
+- 后端：Express.js（提供 API + 静态文件）
+- 通信：HTTP API（Fetch API）
+- 端口：统一使用 3000
+
+**目录结构**：
+```
+src/
+├── web/                       # Web 应用专用
+│   ├── api-server.ts          # Express 服务器入口
+│   ├── routes/                # API 路由
+│   │   ├── search.ts          # 搜索 API
+│   │   ├── compare.ts         # 对比 API
+│   │   ├── download.ts        # 下载 API
+│   │   └── cache.ts           # 缓存管理 API
+│   └── middleware/            # 中间件
+│       ├── cors.ts            # CORS 处理
+│       └── error.ts           # 错误处理
+│
+└── ui/                        # 前端 UI
+    ├── components/            # 可复用组件
+    ├── views/                 # 页面组件
+    └── main.ts                # Web 入口
+```
+
+**启动方式**：
+```bash
+# 开发模式
+npm run dev        # 启动 Express 服务器（端口 3000）
+
+# 生产模式
+npm start          # 启动 Express 服务器（端口 3000）
+
+# 访问 http://localhost:3000 即可使用
+```
+
+**说明**：
+- 📋 **适配器模式为 Tauri 预留**（当前使用 ApiClient）
+- 🎯 **当前专注 Web 应用**
+- ⏸️ **Tauri 客户端未来开发**
+
+// 4. UI 组件使用（无感知）
+// src/ui/views/SearchView.vue
+<script setup lang="ts">
+import { createClient } from '../adapters';
+
+const client = createClient(); // 根据环境自动创建
+
+const performSearch = async () => {
+  const results = await client.search(keyword.value, options.value);
+  // ...
+};
+</script>
+```
+
+**优势**：
+- ✅ UI 组件完全无感知通信方式
+- ✅ Web 和 Tauri 代码复用率 > 95%
 - ✅ 易于测试（可以 Mock 客户端）
 - ✅ 易于扩展（新增客户端实现即可）
 
@@ -141,9 +267,9 @@ const performSearch = async () => {
 
 ---
 
-## 1. 整体布局结构（Web 和 Electron 共享）
+## 1. 整体布局结构（Web 和 Tauri 共享）
 
-**说明**：以下布局设计同时适用于 Web 应用和 Electron 客户端，组件完全复用。
+**说明**：以下布局设计同时适用于 Web 应用和 Tauri 客户端，组件完全复用。
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -230,7 +356,6 @@ const performSearch = async () => {
 - **搜索框**：
   - 占位符：输入作者名或关键字...
   - 支持 Enter 键触发搜索
-  - 支持自动补全（基于搜索历史）
   - 宽度：600px，高度：40px
   
 - **搜索按钮**：
@@ -240,14 +365,6 @@ const performSearch = async () => {
     - 默认：紫色渐变，可点击
     - 搜索中：灰色，禁用，显示 loading 动画
     - 悬停：上浮效果，阴影加深
-
-#### 搜索历史
-- **显示**：最近 10 条搜索历史
-- **交互**：
-  - 点击历史项：快速执行搜索
-  - 点击 ×：删除单条历史
-  - 清空按钮：清空所有历史（可选）
-- **存储**：本地存储，持久化
 
 #### 漫画卡片 (ComicCard)
 - **尺寸**：200px × 280px
@@ -310,7 +427,6 @@ const performSearch = async () => {
 interface SearchState {
   keyword: string              // 搜索关键字
   isSearching: boolean         // 是否正在搜索
-  searchHistory: string[]      // 搜索历史（最近 10 条）
   results: Comic[]             // 搜索结果
   selectedIds: string[]        // 已选择的漫画 ID
 }
@@ -379,6 +495,43 @@ interface Comic {
 │                                         │
 └─────────────────────────────────────────┘
 ```
+
+---
+
+### 2.5 错误提示策略（场景化）
+
+**操作前错误**（模态框，需要用户确认）：
+- 网络错误
+- Cloudflare 验证失败
+- 配置文件错误
+- 覆盖确认
+
+**操作中错误**（Toast 通知，自动消失）：
+- 部分下载失败
+- 重试提示
+- 进度更新
+
+**操作后错误**（页面显示）：
+- 对比结果中的匹配失败
+- 下载完成后的失败列表
+
+---
+
+### 2.6 批量操作确认策略
+
+**不需要确认的操作**：
+- ✅ 添加到下载队列（可逆操作）
+- ✅ 批量下载 ≤ 10 个漫画
+
+**需要确认的操作**：
+- ⚠️ 删除操作（不可逆）
+  - 清空下载队列
+  - 删除缓存文件
+  - 移除漫画
+  
+- ⚠️ 批量下载 > 10 个漫画（耗时操作）
+  - 提示："已选择 X 部漫画，预计耗时 Y 分钟"
+  - 确认按钮："开始下载" / "取消"
 
 ---
 
@@ -696,6 +849,80 @@ interface MatchDetail {
 ⚠️ AI 匹配失败，请检查 AI 配置
 [查看配置] [重试]
 ```
+
+---
+
+### 3.6 缓存管理策略
+
+**缓存文件位置**：
+- 路径：`cache/search_{keyword}.json`
+- 格式：JSON
+- 内容：搜索结果（漫画列表）
+
+**管理方式**：
+- ✅ **手动管理**：默认不清理
+- ✅ **清空缓存按钮**：配置页面提供
+- ✅ **显示缓存占用**：配置页面显示总大小
+- ✅ **文件过滤**：对比页面支持关键字过滤（不删除文件）
+
+**用户操作**：
+1. 打开配置页面
+2. 查看缓存占用（如："缓存占用：15.3 MB，共 28 个文件"）
+3. 点击 [🗑️ 清空缓存]
+4. 确认弹窗："确定要清空所有缓存文件吗？此操作不可恢复。"
+5. 确认后删除所有 `cache/` 目录下的 JSON 文件
+
+---
+
+### 3.7 下载目录管理
+
+**目录模板配置**：
+- 位置：配置页面
+- 默认模板：`{下载目录}/{漫画名}/`
+- 支持变量：
+  - `{下载目录}`：用户配置的默认下载目录
+  - `{作者}`：漫画作者名
+  - `{漫画名}`：漫画名称
+  - `{分类}`：漫画分类（如"單行本/漢化"）
+
+**示例模板**：
+```
+# 默认（简单模式）
+{下载目录}/{漫画名}/
+
+# 按作者分类
+{下载目录}/{作者}/{漫画名}/
+
+# 按分类和作者
+{下载目录}/{分类}/{作者}/{漫画名}/
+```
+
+**目录创建规则**：
+1. 下载前检查目录是否存在
+2. 不存在则自动创建
+3. 目录名自动过滤非法字符（`/ \ : * ? " < > |`）
+4. 重名处理：自动添加序号（如"漫画名 (2)/"）
+
+---
+
+### 3.8 AI 匹配策略
+
+**默认启用**：
+- ✅ 对比时自动使用 AI 匹配
+- ✅ 用户无需额外操作
+- ✅ 配置页面显示 AI 模型状态
+
+**匹配流程**：
+1. 读取网站漫画名
+2. 读取本地文件夹名
+3. AI 智能匹配（相似度计算）
+4. 匹配度 ≥ 0.8 判定为同一漫画
+5. 名称校准（以第三方为准）
+
+**降级策略**：
+- AI 不可用时 → 传统字符串匹配
+- 匹配失败时 → 人工确认列表
+- 配置页面显示："AI 模型不可用，已降级到传统匹配"
 
 ---
 
@@ -2089,12 +2316,12 @@ console.log(boxen('内容', {
 
 ---
 
-## 第三部分：Web 和 Electron 共享 UI 实现 ⭐ 新增
+## 第三部分：Web 和 Tauri 共享 UI 实现 ⭐ 新增
 
 ### 1. 共享策略
 
 **核心原则**：
-- ✅ **组件完全复用**：Web 和 Electron 使用相同的 Vue 组件
+- ✅ **组件完全复用**：Web 和 Tauri 使用相同的 Vue 组件
 - ✅ **样式完全一致**：共享同一套 CSS 样式和主题
 - ✅ **逻辑完全共享**：组合式函数（composables）完全复用
 - ✅ **仅适配器不同**：通过适配器模式处理通信差异
@@ -2130,7 +2357,7 @@ src/ui/                          # 共享 UI 目录
 ├── adapters/                    # 适配器层（处理差异）⭐
 │   ├── types.ts                # 接口定义
 │   ├── api-client.ts           # Web API 客户端
-│   ├── electron-client.ts      # Electron IPC 客户端
+│   ├── tauri-client.ts         # Tauri Commands 客户端
 │   └── index.ts                # 工厂函数
 │
 ├── styles/                      # 共享样式
@@ -2179,20 +2406,16 @@ app.provide('client', createClient());
 app.mount('#app');
 ```
 
-#### 3.3 Electron 启动
+#### 3.3 Tauri 启动
 
 ```typescript
-// src/electron/renderer/main.ts (Electron)
-import { createApp } from 'vue';
-import App from '../../ui/App.vue'; // 使用共享 UI
-import { createClient } from '../../ui/adapters';
-
-const app = createApp(App);
-
-// 提供客户端实例
-app.provide('client', createClient());
-
-app.mount('#app');
+// src-tauri/src/main.rs (Tauri Rust 后端)
+// Tauri 应用启动，加载 Web 前端
+fn main() {
+    tauri::Builder::default()
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
 ```
 
 #### 3.4 Vite 配置
@@ -2236,22 +2459,21 @@ dist/web/
 └── ...
 ```
 
-#### 4.2 Electron 构建
+#### 4.2 Tauri 构建
 
 ```bash
 # 开发模式
-npm run dev:electron
+npm run dev:tauri
 
 # 生产构建
-npm run build:electron
+npm run build:tauri
 
 # 输出目录
-dist/electron/
-├── main.js          # Electron 主进程
-├── preload.js       # 预加载脚本
-├── renderer/        # 渲染进程（共享 UI）
-│   ├── index.html
-│   └── assets/
+src-tauri/target/release/
+├── bundle/
+│   ├── macos/
+│   ├── windows/
+│   └── linux/
 └── ...
 ```
 
@@ -2293,15 +2515,15 @@ describe('ApiClient', () => {
   });
 });
 
-// 测试 Electron 客户端
-import { ElectronClient } from '@/adapters/electron-client';
+// 测试 Tauri 客户端
+import { TauriClient } from '@/adapters/tauri-client';
 
-describe('ElectronClient', () => {
-  it('searches comics via IPC', async () => {
-    const client = new ElectronClient();
-    // Mock window.electronAPI
-    window.electronAPI = {
-      searchComics: vi.fn().mockResolvedValue(mockComics)
+describe('TauriClient', () => {
+  it('searches comics via Tauri Commands', async () => {
+    const client = new TauriClient();
+    // Mock window.__TAURI__
+    window.__TAURI__ = {
+      invoke: vi.fn().mockResolvedValue(mockComics)
     };
     const results = await client.search('TYPE90');
     expect(results).toBeInstanceOf(Array);
@@ -2324,7 +2546,7 @@ describe('ElectronClient', () => {
 - ✅ 测试用例可复用
 
 **用户体验**：
-- ✅ Web 和 Electron 界面完全一致
+- ✅ Web 和 Tauri 界面完全一致
 - ✅ 用户可以自由切换
 - ✅ 学习成本低
 
@@ -2332,6 +2554,8 @@ describe('ElectronClient', () => {
 - ✅ 清晰的职责分离
 - ✅ 易于测试和 Mock
 - ✅ 易于扩展新功能
+- ✅ 更小的打包体积（Tauri）
+- ✅ 更低的内存占用（Tauri）
 
 ---
 
