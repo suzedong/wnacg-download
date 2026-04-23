@@ -1,9 +1,17 @@
 # 依赖
 node_modules/
+src-tauri/target/
 
 # 构建输出
 dist/
 src/ui/dist/
+src-tauri/gen/
+
+# Tauri 构建产物
+src-tauri/target/
+src-tauri/**/*.rs.bk
+*.pdb
+src-tauri/bundle/
 
 # 缓存文件
 cache/*.json
@@ -12,14 +20,45 @@ cache/*.json
 # 日志
 *.log
 logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # 环境配置
 .env
 .env.local
+.env.*.local
 
 # 配置文件（使用 conf 库默认路径）
 config.json
 
+# 编辑器
+.idea/
+*.swp
+*.swo
+*~
+.vscode/settings.json
+
+# 测试覆盖率
+coverage/
+*.lcov
+.nyc_output/
+
+# 临时文件
+*.tmp
+*.temp
+.temp/
+.tmp/
+
 # 系统文件
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 Thumbs.db
+ehthumbs.db
+
+# macOS
+**/node_modules/.DS_Store
