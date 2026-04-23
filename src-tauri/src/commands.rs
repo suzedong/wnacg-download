@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::State;
-use std::sync::Mutex;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 // 应用状态管理
 pub struct AppState {
@@ -25,9 +26,9 @@ pub struct SearchRequest {
 #[tauri::command]
 pub async fn search_comics(
     keyword: String,
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     let response = client
@@ -49,9 +50,9 @@ pub async fn search_comics(
 
 #[tauri::command]
 pub async fn get_cache_list(
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     let response = client
@@ -71,9 +72,9 @@ pub async fn get_cache_list(
 #[tauri::command]
 pub async fn delete_cache(
     keyword: String,
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<(), String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     client
@@ -97,9 +98,9 @@ pub struct CompareRequest {
 pub async fn compare_comics(
     keyword: String,
     local_path: Option<String>,
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<serde_json::Value, String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     let response = client
@@ -132,9 +133,9 @@ pub struct DownloadRequest {
 pub async fn download_comics(
     comics: Vec<serde_json::Value>,
     storage_path: String,
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<serde_json::Value, String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     let response = client
@@ -158,9 +159,9 @@ pub async fn download_comics(
 #[tauri::command]
 pub async fn cancel_download(
     aid: String,
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<(), String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     client
@@ -179,9 +180,9 @@ pub async fn cancel_download(
 
 #[tauri::command]
 pub async fn get_config(
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<serde_json::Value, String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     let response = client
@@ -202,9 +203,9 @@ pub async fn get_config(
 pub async fn set_config(
     key: String,
     value: serde_json::Value,
-    state: State<'_, Mutex<AppState>>,
+    state: State<'_, Arc<Mutex<AppState>>>,
 ) -> Result<(), String> {
-    let state = state.lock().map_err(|e| e.to_string())?;
+    let state = state.lock().await;
     let client = reqwest::Client::new();
     
     client
@@ -231,9 +232,12 @@ pub async fn select_directory(
     let (tx, rx) = std::sync::mpsc::channel();
     
     window.dialog().file().pick_folder(move |folder| {
-        let path = folder.map(|f| f.path().to_string());
+        let path = folder.and_then(|f| f.as_path().map(|p| p.to_string_lossy().to_string()));
         let _ = tx.send(path);
     });
     
-    rx.recv().unwrap_or(None)
+    match rx.recv() {
+        Ok(opt) => Ok(opt),
+        Err(_) => Ok(None),
+    }
 }
