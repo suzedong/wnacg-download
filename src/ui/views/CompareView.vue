@@ -83,11 +83,15 @@
 </template>
 
 <script setup>
-import { ref, defineEmits } from 'vue';
+import { ref, defineEmits, inject } from 'vue';
 import ComicCard from '../components/ComicCard.vue';
 import StatCard from '../components/StatCard.vue';
+import { createClient } from '../adapters';
 
 const emit = defineEmits(['download-comics']);
+
+// 注入客户端实例
+const client = inject('client') || createClient();
 
 const compareKeyword = ref('');
 const compareStoragePath = ref('');
@@ -97,14 +101,9 @@ const isDownloading = ref(false);
 const compareError = ref('');
 
 const selectComparePath = async () => {
-  try {
-    const path = await window.electronAPI.selectDirectory();
-    if (path) {
-      compareStoragePath.value = path;
-    }
-  } catch (error) {
-    compareError.value = error.message;
-  }
+  // Web 环境暂不支持文件选择器，需要用户手动输入
+  console.warn('Web 环境：请手动输入路径');
+  alert('Web 环境暂不支持文件选择器，请手动输入本地存储路径');
 };
 
 const compareComics = async () => {
@@ -115,7 +114,7 @@ const compareComics = async () => {
   compareResult.value = null;
   
   try {
-    const response = await window.electronAPI.compareComics(compareKeyword.value, compareStoragePath.value);
+    const response = await client.compare(compareKeyword.value, compareStoragePath.value);
     compareResult.value = response;
   } catch (error) {
     compareError.value = error.message;

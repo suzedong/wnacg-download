@@ -68,7 +68,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, inject } from 'vue';
+import { createClient } from '../adapters';
+
+// 注入客户端实例
+const client = inject('client') || createClient();
 
 const localConfig = ref({
   defaultStoragePath: '',
@@ -83,7 +87,7 @@ const configError = ref('');
 
 const loadConfig = async () => {
   try {
-    const response = await window.electronAPI.getConfig();
+    const response = await client.getAll();
     localConfig.value = response;
   } catch (error) {
     configError.value = error.message;
@@ -92,22 +96,16 @@ const loadConfig = async () => {
 
 const saveConfig = async (key, value) => {
   try {
-    await window.electronAPI.setConfig(key, value);
+    await client.set(key, value);
   } catch (error) {
     configError.value = error.message;
   }
 };
 
 const selectStoragePath = async () => {
-  try {
-    const path = await window.electronAPI.selectDirectory();
-    if (path) {
-      localConfig.value.defaultStoragePath = path;
-      saveConfig('defaultStoragePath', path);
-    }
-  } catch (error) {
-    configError.value = error.message;
-  }
+  // Web 环境暂不支持文件选择器，需要用户手动输入
+  console.warn('Web 环境：请手动输入路径');
+  alert('Web 环境暂不支持文件选择器，请手动输入存储路径');
 };
 
 watch(() => localConfig.value, (newVal) => {
