@@ -42,14 +42,16 @@ export const searchCommand = new Command('search')
 
       spinner.text = `正在搜索 "${author}"...`;
       
+      const startTime = Date.now();
       const comics = await scraper.search({
         author,
         maxPages: options.pages ? parseInt(options.pages) : configManager.get('defaultMaxPages'),
         onlyChinese: !options.all,
         requestDelay,
       });
+      const duration = Date.now() - startTime;
 
-      spinner.succeed(`找到 ${comics.length} 部漫画`);
+      spinner.succeed(`找到 ${comics.length} 部漫画（耗时 ${(duration / 1000).toFixed(1)} 秒）`);
 
       // 使用 SearchManager 保存结果
       const cacheDir = path.join(process.cwd(), 'cache');
@@ -71,13 +73,21 @@ export const searchCommand = new Command('search')
         totalComics: comics.length,
       };
       searchManager.save(author, result);
-      const cacheFile = path.join(cacheDir, `search_${author}.json`);
+      const cacheFile = path.join(cacheDir, `search_${author.replace(/[<>:"/\\|?*]/g, '_')}.json`);
       
       console.log(`
 ${chalk.green('✓')} 漫画信息已保存到：${chalk.cyan(cacheFile)}`);
 
       if (options.json) {
-        console.log(JSON.stringify(comics, null, 2));
+        // JSON 输出模式
+        const output = {
+          success: true,
+          keyword: author,
+          searchTime: new Date().toISOString(),
+          totalComics: comics.length,
+          comics,
+        };
+        console.log(JSON.stringify(output, null, 2));
       } else {
         printResults(comics);
       }
@@ -85,7 +95,9 @@ ${chalk.green('✓')} 漫画信息已保存到：${chalk.cyan(cacheFile)}`);
       await scraper.close();
     } catch (error) {
       spinner.fail('搜索失败');
-      console.error(chalk.red(`错误：${error}`));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(chalk.red(`错误：${errorMessage}`));
+      console.error(chalk.dim('提示：检查网络连接或稍后重试'));
       await scraper.close();
       process.exit(1);
     }
@@ -97,20 +109,21 @@ function printResults(comics: Comic[]): void {
     return;
   }
 
-  console.log('\n' + chalk.bold('搜索结果:'));
-  console.log(chalk.dim('─'.repeat(80)) + '\n');
+  console.log('\n' + chalk.bold.cyan('搜索结果:'));
+  console.log(chalk.dim('─'.repeat(100)) + '\n');
 
   comics.forEach((comic, index) => {
-    const num = chalk.cyan(`${String(index + 1).padStart(2, ' ')}`);
-    const title = chalk.white(comic.title.length > 60 ? comic.title.substring(0, 57) + '...' : comic.title);
+    const num = chalk.cyan.bold(`${String(index + 1).padStart(2, ' ')}.`);
+    const title = chalk.white(comic.title.length > 70 ? comic.title.substring(0, 67) + '...' : comic.title);
     const category = chalk.yellow(comic.category);
+    const author = comic.author ? chalk.dim(`作者：${comic.author}`) : '';
     
     console.log(`${figures.pointer} ${num} ${title}`);
-    console.log(`   ${chalk.dim(category)}`);
-    console.log(chalk.dim('─'.repeat(80)));
+    console.log(`   ${category}${author ? ' | ' + author : ''}`);
+    console.log(chalk.dim('─'.repeat(100)));
   });
 
-  console.log(`\n${chalk.green(figures.tick)} 总计：${chalk.bold(comics.length.toString())} 部漫画\n`);
+  console.log(`\n${chalk.green(figures.tick)} 总计：${chalk.bold.green(comics.length.toString())} 部漫画\n`);
 }
 
 /**
@@ -124,24 +137,29 @@ function showSearchResultsList(): void {
   
   if (metadataList.length === 0) {
     console.log(chalk.yellow('\n暂无搜索结果\n'));
+    console.log(chalk.dim('提示：使用 wnacg-dl search <关键字> 进行搜索\n'));
     return;
   }
   
-  console.log('\n' + chalk.bold('搜索结果列表:'));
-  console.log(chalk.dim('─'.repeat(100)) + '\n');
+  console.log('\n' + chalk.bold.cyan('搜索结果列表:'));
+  console.log(chalk.dim('─'.repeat(120)) + '\n');
   
   metadataList.forEach((metadata, index) => {
-    const num = chalk.cyan(`${String(index + 1).padStart(2, ' ')}`);
-    const keyword = chalk.white(metadata.keyword);
+    const num = chalk.cyan.bold(`${String(index + 1).padStart(2, ' ')}.`);
+    const keyword = chalk.white.bold(metadata.keyword);
     const time = chalk.dim(new Date(metadata.searchTime).toLocaleString('zh-CN'));
-    const count = chalk.green(`${metadata.totalComics} 部`);
+    const count = chalk.green.bold(`${metadata.totalComics} 部`);
     const size = chalk.blue((metadata.fileSize / 1024).toFixed(1) + ' KB');
     
     console.log(`${figures.pointer} ${num} ${keyword}`);
-    console.log(`   时间：${time}  |  数量：${count}  |  大小：${size}`);
-    console.log(chalk.dim('─'.repeat(100)));
+    console.log(`   ${chalk.dim('搜索时间:')} ${time}`);
+    console.log(`   ${chalk.dim('漫画数量:')} ${count}  |  ${chalk.dim('文件大小:')} ${size}`);
+    console.log(chalk.dim('─'.repeat(120)));
   });
   
-  console.log(`\n${chalk.green(figures.tick)} 总计：${chalk.bold(metadataList.length.toString())} 个搜索结果\n`);
-  console.log(chalk.dim('提示：使用 wnacg-dl search <关键字> 查看具体搜索结果\n'));
+  console.log(`\n${chalk.green(figures.tick)} 总计：${chalk.bold.green(metadataList.length.toString())} 个搜索结果\n`);
+  console.log(chalk.dim('提示：'));
+  console.log(chalk.dim('  - 使用 wnacg-dl search <关键字> 查看具体搜索结果'));
+  console.log(chalk.dim('  - 使用 wnacg-dl compare <关键字> 对比本地漫画'));
+  console.log(chalk.dim('  - 使用 wnacg-dl download <关键字> 下载漫画\n'));
 }
