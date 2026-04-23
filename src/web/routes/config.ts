@@ -8,10 +8,10 @@ import { configManager } from '../../config.js';
 const router = Router();
 
 /**
- * GET /api/config
+ * GET /
  * 获取所有配置
  */
-router.get('/config', (req, res) => {
+router.get('/', (req, res) => {
   try {
     const config = {
       defaultStoragePath: configManager.get('defaultStoragePath'),
@@ -42,10 +42,10 @@ router.get('/config', (req, res) => {
 });
 
 /**
- * GET /api/config/:key
+ * GET /:key
  * 获取单个配置项
  */
-router.get('/config/:key', (req, res) => {
+router.get('/:key', (req, res) => {
   try {
     const { key } = req.params;
     const value = configManager.get(key);
@@ -66,10 +66,10 @@ router.get('/config/:key', (req, res) => {
 });
 
 /**
- * POST /api/config
+ * POST /
  * 设置配置项
  */
-router.post('/config', (req, res) => {
+router.post('/', (req, res) => {
   const { key, value } = req.body;
 
   if (!key) {

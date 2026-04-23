@@ -24,7 +24,21 @@ const PORT = 3000;
 // 中间件
 app.use(corsMiddleware({ origin: ['http://localhost:5173', 'http://localhost:3000'] }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../src/ui')));
+
+// 提供静态文件（优先使用构建后的文件，如果没有则使用开发目录）
+const staticPath = path.join(__dirname, '../dist/ui');
+const devStaticPath = path.join(__dirname, '../src/ui');
+const fs = await import('fs');
+
+if (fs.existsSync(staticPath)) {
+  // 生产模式：使用构建后的文件
+  app.use(express.static(staticPath));
+  console.log('✅ 使用生产模式：dist/ui');
+} else {
+  // 开发模式：使用源文件
+  app.use(express.static(devStaticPath));
+  console.log('⚠️  使用开发模式静态文件：src/ui');
+}
 
 // 根路由 - 欢迎页面（简化版）
 app.get('/', (req, res) => {

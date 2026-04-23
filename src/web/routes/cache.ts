@@ -12,7 +12,7 @@ const router = Router();
  * GET /api/cache/list
  * 获取缓存列表
  */
-router.get('/list', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const cacheDir = path.join(process.cwd(), 'cache');
     const searchManager = new SearchManager(cacheDir);

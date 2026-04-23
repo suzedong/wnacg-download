@@ -17,6 +17,8 @@
     "dev:api": "tsx src/api-server.ts",
     "dev:web": "concurrently \"npm run dev:api\" \"npm run dev:ui\"",
     "build:ui": "vite build",
+    "build:all": "npm run build && npm run build:ui",
+    "start:web": "npm run build:all && node dist/api-server.js",
     "dev:tauri": "tauri dev",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",

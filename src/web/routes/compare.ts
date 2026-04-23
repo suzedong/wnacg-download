@@ -17,7 +17,7 @@ const router = Router();
  * POST /api/compare
  * 对比网站和本地漫画
  */
-router.post('/compare', async (req, res) => {
+router.post('/', async (req, res) => {
   const { keyword, localPath } = req.body;
 
   if (!keyword) {

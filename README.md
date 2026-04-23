@@ -200,10 +200,33 @@ npm run dev -- download TYPE90 -y
 ### 3. 运行 Web（可选）
 
 ```bash
-# 启动 Web 开发服务器
+# 启动 Web 开发服务器（推荐）
 npm run dev:web
 
-# 访问 http://localhost:3000
+# 访问 http://localhost:5173/ （Vite 开发服务器）
+# 或 http://localhost:3000/ （API 服务器）
+```
+
+**开发模式说明**：
+
+`npm run dev:web` 会同时启动两个服务器：
+
+1. **Vite UI 服务器**（端口 5173）
+   - 提供 Vue 前端界面
+   - 支持热重载
+   - 访问：http://localhost:5173/
+   - **推荐使用此端口进行开发**
+
+2. **Express API 服务器**（端口 3000）
+   - 提供后端 API 接口
+   - 提供静态文件服务
+   - 访问：http://localhost:3000/
+
+**生产模式**（合并到一个端口）：
+
+```bash
+# 构建并启动（前端和 API 都在 3000 端口）
+npm run start:web
 ```
 
 ### 4. 运行 Tauri（可选）

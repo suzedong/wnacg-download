@@ -12,10 +12,10 @@ import path from 'path';
 const router = Router();
 
 /**
- * POST /api/search
+ * POST /
  * 搜索漫画
  */
-router.post('/search', async (req, res) => {
+router.post('/', async (req, res) => {
   const { keyword, maxPages = 1, onlyChinese = true, force = false } = req.body;
 
   if (!keyword) {

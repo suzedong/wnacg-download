@@ -35,7 +35,7 @@
 </template>
 
 <script setup>
-import { ref, inject } from 'vue';
+import { ref, provide } from 'vue';
 import Header from './components/Header.vue';
 import Footer from './components/Footer.vue';
 import SearchView from './views/SearchView.vue';
@@ -48,8 +48,9 @@ const activeTab = ref('search');
 const downloadQueue = ref([]);
 const isDownloading = ref(false);
 
-// 注入客户端实例（兼容直接导入）
-const client = inject('client') || createClient();
+// 创建并提供客户端实例
+const client = createClient();
+provide('client', client);
 
 const handleBack = () => {
 };

@@ -10,12 +10,11 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src/ui'),
     },
   },
-  base: './',
+  base: '/',
   build: {
     outDir: 'dist/ui',
     emptyOutDir: true,
   },
-  root: path.resolve(__dirname, './src/ui'),
   server: {
     port: 5173,
     strictPort: true,

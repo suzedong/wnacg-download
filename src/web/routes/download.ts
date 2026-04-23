@@ -16,7 +16,7 @@ const activeDownloaders = new Map<string, Downloader>();
  * POST /api/download
  * 下载漫画
  */
-router.post('/download', async (req, res) => {
+router.post('/', async (req, res) => {
   const { comics, storagePath } = req.body;
 
   if (!comics || !Array.isArray(comics) || comics.length === 0) {
@@ -76,10 +76,10 @@ router.post('/download', async (req, res) => {
 });
 
 /**
- * POST /api/download/cancel
+ * POST /cancel
  * 取消下载
  */
-router.post('/download/cancel', async (req, res) => {
+router.post('/cancel', async (req, res) => {
   const { downloadId } = req.body;
 
   if (!downloadId) {

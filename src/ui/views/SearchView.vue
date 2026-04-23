@@ -64,7 +64,7 @@
 </template>
 
 <script setup>
-import { ref, defineEmits, inject } from 'vue';
+import { ref, inject } from 'vue';
 import ComicCard from '../components/ComicCard.vue';
 import SearchResultList from '../components/SearchResultList.vue';
 import { createClient } from '../adapters';

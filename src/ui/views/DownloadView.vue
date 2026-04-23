@@ -52,7 +52,7 @@
 </template>
 
 <script setup>
-import { ref, defineProps, defineEmits } from 'vue';
+import { ref, inject } from 'vue';
 import QueueItem from '../components/QueueItem.vue';
 
 const props = defineProps({
