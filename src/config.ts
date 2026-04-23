@@ -10,7 +10,7 @@ import fs from 'fs';
 const defaultConfig: Config = {
   defaultStoragePath: path.join(os.homedir(), 'comics'),
   defaultProxy: undefined,
-  defaultMaxPages: 5,
+  defaultMaxPages: 0, // 0 表示不限制，爬取所有页面
   defaultOnlyChinese: true,
   requestDelay: 1000, // 默认 1000ms，平衡速度和礼貌爬取
   concurrentDownloads: 3,

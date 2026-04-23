@@ -175,17 +175,17 @@ export class WNACGScraper implements ISearchService {
       await this.initialize();
     }
 
-    const { author, onlyChinese = true } = options;
+    const { author, onlyChinese = true, maxPages } = options;
     const comics: Comic[] = [];
     let totalPages = 1;
 
     // 先获取第一页，提取总页数
-    logger.info('Crawling page 1...');
+    logger.info('正在爬取第 1 页...');
     const firstPageUrl = this.buildSearchUrl(author, 1);
 
     if (!this.page) throw new Error('Page not initialized');
     
-    logger.info(`Fetching page 1 from website...`);
+    logger.info(`正在从网站获取第 1 页...`);
     await this.page.goto(firstPageUrl, { 
       waitUntil: 'networkidle',
       timeout: 60000
@@ -221,18 +221,22 @@ export class WNACGScraper implements ISearchService {
     
     if (pageNumbers.length > 0) {
       totalPages = Math.max(...pageNumbers);
-      logger.info(`Found total ${totalPages} pages`);
+      logger.info(`共找到 ${totalPages} 页`);
     }
 
-    // 解析第一页的漫画信息
-    await this.parseComicPage(html, comics, onlyChinese, author);
-
-    // 计算需要爬取的页数（去掉限制，爬取所有页面）
-    const pagesToCrawl = totalPages;
+    // 计算实际需要爬取的页数（考虑 maxPages 限制）
+    let pagesToCrawl = totalPages;
+    if (maxPages && maxPages > 0) {
+      pagesToCrawl = Math.min(totalPages, maxPages);
+      if (pagesToCrawl < totalPages) {
+        logger.info(`限制爬取 ${maxPages} 页，实际爬取 ${pagesToCrawl} 页（共 ${totalPages} 页）`);
+      }
+    }
+    
     const remainingPages = pagesToCrawl - 1; // 已经爬取了第一页
 
     if (remainingPages > 0) {
-      logger.info(`Crawling ${remainingPages} more pages in parallel...`);
+      logger.info(`正在并行爬取剩余 ${remainingPages} 页...`);
       
       // 生成剩余页面的 URL
       const pageUrls = [];
@@ -246,7 +250,8 @@ export class WNACGScraper implements ISearchService {
           const newPage = await this.browser?.newPage();
           if (!newPage) throw new Error('Failed to create new page');
           
-          logger.info(`Fetching page ${url.split('&p=')[1]} from website...`);
+          const pageNum = url.split('&p=')[1];
+          logger.info(`正在从网站获取第 ${pageNum} 页...`);
           await newPage.goto(url, { 
             waitUntil: 'networkidle',
             timeout: 60000
@@ -276,7 +281,7 @@ export class WNACGScraper implements ISearchService {
       }
     }
 
-    logger.info(`Found ${comics.length} comics`);
+    logger.info(`共找到 ${comics.length} 部漫画`);
     return comics;
   }
 
