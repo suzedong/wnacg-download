@@ -3,218 +3,190 @@
  * 通过 HTTP API 与后端通信
  */
 
-import type { 
-  ISearchClient, 
-  IDownloadClient, 
-  ICompareClient, 
+import type {
+  ISearchClient,
+  ICompareClient,
+  IDownloadClient,
   IConfigClient,
-  Comic,
-  SearchCacheItem,
+  SearchOptions,
+  SearchResultMetadata,
   DownloadResult,
-  DownloadProgress,
-  CompareResult
-} from './types';
+} from './types.js';
+import type { Comic, CompareResult, DownloadProgress, Config } from '../../types/index.js';
+
+const API_BASE_URL = 'http://localhost:3000/api';
 
 /**
- * Web API 客户端实现
+ * Web 搜索客户端
  */
-export class ApiClient implements ISearchClient, IDownloadClient, ICompareClient, IConfigClient {
-  private baseUrl: string;
-  private progressCallbacks: Array<(progress: DownloadProgress) => void> = [];
-  private completedCallbacks: Array<(result: DownloadResult) => void> = [];
-  private errorCallbacks: Array<(error: Error) => void> = [];
-
-  constructor(baseUrl: string = '') {
-    this.baseUrl = baseUrl;
-  }
-
-  // ==================== 搜索接口 ====================
-
-  async search(keyword: string, options?: any): Promise<Comic[]> {
-    const response = await fetch(`${this.baseUrl}/api/search`, {
+export class WebSearchClient implements ISearchClient {
+  async search(keyword: string, options?: SearchOptions): Promise<Comic[]> {
+    const response = await fetch(`${API_BASE_URL}/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         keyword,
-        ...options,
+        maxPages: options?.maxPages,
+        onlyChinese: options?.onlyChinese,
+        force: options?.force,
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      const error = await response.json();
+      throw new Error(error.error || '搜索失败');
     }
 
     const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '搜索失败');
-    }
-
     return data.comics;
   }
 
-  async getCacheList(): Promise<SearchCacheItem[]> {
-    const response = await fetch(`${this.baseUrl}/api/cache/list`);
+  async getSearchList(): Promise<SearchResultMetadata[]> {
+    const response = await fetch(`${API_BASE_URL}/cache/list`);
     
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      throw new Error('获取搜索结果列表失败');
     }
 
     const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '获取缓存列表失败');
-    }
-
     return data.files;
   }
 
-  async deleteCache(keyword: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/cache/${encodeURIComponent(keyword)}`, {
+  async deleteSearch(keyword: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/cache/${encodeURIComponent(keyword)}`, {
       method: 'DELETE',
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '删除缓存失败');
+      throw new Error('删除搜索结果失败');
     }
   }
+}
 
-  // ==================== 下载接口 ====================
-
-  async download(comics: Comic[], options?: any): Promise<DownloadResult> {
-    const response = await fetch(`${this.baseUrl}/api/download`, {
+/**
+ * Web 对比客户端
+ */
+export class WebCompareClient implements ICompareClient {
+  async compare(keyword: string, localPath: string): Promise<CompareResult> {
+    const response = await fetch(`${API_BASE_URL}/compare`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        comics,
-        ...options,
-      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ keyword, localPath }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      const error = await response.json();
+      throw new Error(error.error || '对比失败');
     }
 
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '下载失败');
+    return await response.json();
+  }
+}
+
+/**
+ * Web 下载客户端
+ */
+export class WebDownloadClient implements IDownloadClient {
+  private progressCallback?: (progress: DownloadProgress) => void;
+
+  async download(comics: Comic[], storagePath: string): Promise<DownloadResult> {
+    const response = await fetch(`${API_BASE_URL}/download`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ comics, storagePath }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || '下载失败');
     }
 
-    return data.result;
-  }
-
-  onProgress(callback: (progress: DownloadProgress) => void): void {
-    this.progressCallbacks.push(callback);
-  }
-
-  onCompleted(callback: (result: DownloadResult) => void): void {
-    this.completedCallbacks.push(callback);
-  }
-
-  onError(callback: (error: Error) => void): void {
-    this.errorCallbacks.push(callback);
+    return await response.json();
   }
 
   async cancel(aid: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/download/cancel`, {
+    const response = await fetch(`${API_BASE_URL}/download/cancel`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ aid }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      throw new Error('取消下载失败');
     }
   }
 
-  // ==================== 对比接口 ====================
-
-  async compare(keyword: string, localPath?: string, options?: any): Promise<CompareResult> {
-    const response = await fetch(`${this.baseUrl}/api/compare`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        keyword,
-        localPath,
-        ...options,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '对比失败');
-    }
-
-    return data.result;
+  onProgress(callback: (progress: DownloadProgress) => void): void {
+    this.progressCallback = callback;
+    
+    // 在实际实现中，这里应该建立 WebSocket 或 EventSource 连接
+    // 来接收服务器的进度推送
+    // 暂时使用轮询方式
+    this.startPolling();
   }
 
-  // ==================== 配置接口 ====================
+  private startPolling(): void {
+    // 简单的轮询实现
+    setInterval(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/download/progress`);
+        if (response.ok) {
+          const progress = await response.json();
+          if (this.progressCallback) {
+            this.progressCallback(progress);
+          }
+        }
+      } catch (error) {
+        // 忽略错误
+      }
+    }, 1000);
+  }
+}
 
-  async getAll(): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/config`);
+/**
+ * Web 配置客户端
+ */
+export class WebConfigClient implements IConfigClient {
+  async getAll(): Promise<Config> {
+    const response = await fetch(`${API_BASE_URL}/config`);
     
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      throw new Error('获取配置失败');
     }
 
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '获取配置失败');
-    }
-
-    return data.config;
+    return await response.json();
   }
 
   async get<T>(key: string): Promise<T> {
-    const response = await fetch(`${this.baseUrl}/api/config/${encodeURIComponent(key)}`);
+    const response = await fetch(`${API_BASE_URL}/config/${key}`);
     
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      throw new Error(`获取配置项 ${key} 失败`);
     }
 
     const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '获取配置失败');
-    }
-
     return data.value as T;
   }
 
   async set<T>(key: string, value: T): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/config`, {
+    const response = await fetch(`${API_BASE_URL}/config`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ key, value }),
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status}`);
+      throw new Error(`设置配置项 ${key} 失败`);
     }
-
-    const data = await response.json();
-    if (!data.success) {
-      throw new Error(data.error || '设置配置失败');
-    }
-  }
-
-  // ==================== 内部方法：触发事件 ====================
-
-  protected emitProgress(progress: DownloadProgress): void {
-    this.progressCallbacks.forEach(cb => cb(progress));
-  }
-
-  protected emitCompleted(result: DownloadResult): void {
-    this.completedCallbacks.forEach(cb => cb(result));
-  }
-
-  protected emitError(error: Error): void {
-    this.errorCallbacks.forEach(cb => cb(error));
   }
 }

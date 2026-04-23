@@ -8,7 +8,7 @@ import { Comparer } from '../../core/comparer.js';
 import { configManager } from '../../config.js';
 import { checkAndInstallDependencies } from '../../setup.js';
 import { wnacgConfig } from '../../config/wnacg.config.js';
-import type { Comic, LocalComic } from '../../types.js';
+import type { Comic, LocalComic } from '../../types/index.js';
 
 export const compareCommand = new Command('compare')
   .description('对比网站漫画和本地收藏')

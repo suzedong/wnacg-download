@@ -10,7 +10,7 @@ import { Downloader } from '../../core/downloader.js';
 import { configManager } from '../../config.js';
 import { checkAndInstallDependencies } from '../../setup.js';
 import { wnacgConfig } from '../../config/wnacg.config.js';
-import type { Comic } from '../../types.js';
+import type { Comic } from '../../types/index.js';
 
 export const downloadCommand = new Command('download')
   .description('从 wnacg.com 下载漫画')

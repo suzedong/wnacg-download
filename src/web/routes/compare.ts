@@ -21,11 +21,13 @@ router.post('/', async (req, res) => {
   const { keyword, localPath } = req.body;
 
   if (!keyword) {
-    return res.json({ success: false, error: '请输入关键字' });
+    res.json({ success: false, error: '请输入关键字' });
+    return;
   }
 
   if (!localPath) {
-    return res.json({ success: false, error: '请选择本地存储路径' });
+    res.json({ success: false, error: '请选择本地存储路径' });
+    return;
   }
 
   try {
@@ -66,23 +68,18 @@ router.post('/', async (req, res) => {
 
     // 2. 扫描本地漫画
     const scanner = new Scanner();
-    const localComics = await scanner.scan(localPath);
+    const localComics = await scanner.scanDirectory(localPath);
     console.log(`扫描到本地漫画：${localComics.length} 部`);
 
     // 3. 对比
     const comparer = new Comparer();
-    const result = await comparer.compare(websiteComics, localComics);
+    const compareResult = await comparer.compare(websiteComics || [], localComics);
     
-    console.log(`对比完成：网站=${result.websiteComics.length}, 本地=${result.localComics.length}, 需要下载=${result.toDownload.length}, 已拥有=${result.alreadyHave.length}`);
+    console.log(`对比完成：网站=${compareResult.websiteComics.length}, 本地=${compareResult.localComics.length}, 需要下载=${compareResult.toDownload.length}, 已拥有=${compareResult.alreadyHave.length}`);
 
     res.json({
       success: true,
-      result: {
-        websiteComics: result.websiteComics,
-        localComics: result.localComics,
-        toDownload: result.toDownload,
-        alreadyHave: result.alreadyHave,
-      }
+      result: compareResult,
     });
 
   } catch (error) {

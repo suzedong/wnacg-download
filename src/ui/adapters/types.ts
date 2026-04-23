@@ -1,9 +1,9 @@
 /**
  * 适配器层类型定义
- * 定义 Web 和 Electron 共享的接口
+ * 为 Web 和 Tauri 提供统一的客户端接口
  */
 
-import type { Comic, SearchOptions, DownloadOptions, DownloadResult, CompareResult } from '../../types';
+import type { Comic, CompareResult, DownloadProgress, Config } from '../../types/index.js';
 
 /**
  * 搜索客户端接口
@@ -14,75 +14,36 @@ export interface ISearchClient {
    * @param keyword 关键字
    * @param options 搜索选项
    */
-  search(keyword: string, options?: Partial<SearchOptions>): Promise<Comic[]>;
+  search(keyword: string, options?: SearchOptions): Promise<Comic[]>;
   
   /**
-   * 获取缓存列表
+   * 获取搜索结果列表
    */
-  getCacheList(): Promise<SearchCacheItem[]>;
+  getSearchList(): Promise<SearchResultMetadata[]>;
   
   /**
-   * 删除缓存
-   * @param keyword 关键字
+   * 删除搜索结果
    */
-  deleteCache(keyword: string): Promise<void>;
+  deleteSearch(keyword: string): Promise<void>;
 }
 
 /**
- * 搜索缓存项
+ * 搜索选项
  */
-export interface SearchCacheItem {
+export interface SearchOptions {
+  maxPages?: number;
+  onlyChinese?: boolean;
+  force?: boolean;
+}
+
+/**
+ * 搜索结果元数据
+ */
+export interface SearchResultMetadata {
   keyword: string;
   searchTime: string;
-  comicCount: number;
+  totalComics: number;
   fileSize: number;
-}
-
-/**
- * 下载客户端接口
- */
-export interface IDownloadClient {
-  /**
-   * 下载漫画
-   * @param comics 漫画列表
-   * @param options 下载选项
-   */
-  download(comics: Comic[], options?: Partial<DownloadOptions>): Promise<DownloadResult>;
-  
-  /**
-   * 监听下载进度
-   * @param callback 进度回调
-   */
-  onProgress(callback: (progress: DownloadProgress) => void): void;
-  
-  /**
-   * 监听下载完成
-   * @param callback 完成回调
-   */
-  onCompleted(callback: (result: DownloadResult) => void): void;
-  
-  /**
-   * 监听下载错误
-   * @param callback 错误回调
-   */
-  onError(callback: (error: Error) => void): void;
-  
-  /**
-   * 取消下载
-   * @param aid 漫画 ID
-   */
-  cancel(aid: string): Promise<void>;
-}
-
-/**
- * 下载进度
- */
-export interface DownloadProgress {
-  aid: string;
-  downloaded: number;
-  total: number;
-  speed?: number;
-  status: 'pending' | 'downloading' | 'completed' | 'error';
 }
 
 /**
@@ -93,9 +54,41 @@ export interface ICompareClient {
    * 对比漫画
    * @param keyword 搜索关键字
    * @param localPath 本地路径
-   * @param options 对比选项
    */
-  compare(keyword: string, localPath?: string, options?: any): Promise<CompareResult>;
+  compare(keyword: string, localPath: string): Promise<CompareResult>;
+}
+
+/**
+ * 下载客户端接口
+ */
+export interface IDownloadClient {
+  /**
+   * 下载漫画
+   * @param comics 漫画列表
+   * @param storagePath 存储路径
+   */
+  download(comics: Comic[], storagePath: string): Promise<DownloadResult>;
+  
+  /**
+   * 取消下载
+   * @param aid 漫画 ID
+   */
+  cancel(aid: string): Promise<void>;
+  
+  /**
+   * 监听下载进度
+   * @param callback 进度回调
+   */
+  onProgress(callback: (progress: DownloadProgress) => void): void;
+}
+
+/**
+ * 下载结果
+ */
+export interface DownloadResult {
+  success: boolean;
+  downloaded: string[];
+  failed: string[];
 }
 
 /**
@@ -105,7 +98,7 @@ export interface IConfigClient {
   /**
    * 获取所有配置
    */
-  getAll(): Promise<any>;
+  getAll(): Promise<Config>;
   
   /**
    * 获取配置项
@@ -122,6 +115,16 @@ export interface IConfigClient {
 }
 
 /**
- * 通用客户端接口（所有客户端的集合）
+ * 客户端类型
  */
-export interface IApiClient extends ISearchClient, IDownloadClient, ICompareClient, IConfigClient {}
+export type ClientType = 'web' | 'tauri';
+
+/**
+ * 客户端工厂接口
+ */
+export interface IClientFactory {
+  search: ISearchClient;
+  compare: ICompareClient;
+  download: IDownloadClient;
+  config: IConfigClient;
+}

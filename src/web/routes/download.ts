@@ -20,7 +20,8 @@ router.post('/', async (req, res) => {
   const { comics, storagePath } = req.body;
 
   if (!comics || !Array.isArray(comics) || comics.length === 0) {
-    return res.json({ success: false, error: '请选择要下载的漫画' });
+    res.json({ success: false, error: '请选择要下载的漫画' });
+    return;
   }
 
   try {
@@ -83,13 +84,15 @@ router.post('/cancel', async (req, res) => {
   const { downloadId } = req.body;
 
   if (!downloadId) {
-    return res.json({ success: false, error: '缺少下载 ID' });
+    res.json({ success: false, error: '缺少下载 ID' });
+    return;
   }
 
   try {
     const downloader = activeDownloaders.get(downloadId);
     if (!downloader) {
-      return res.json({ success: false, error: '下载不存在' });
+      res.json({ success: false, error: '下载不存在' });
+      return;
     }
 
     // TODO: 实现取消下载方法

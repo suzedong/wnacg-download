@@ -1,131 +1,80 @@
 /**
  * Tauri IPC 客户端
- * 通过 Tauri Commands 与 Rust 后端通信
+ * 通过 Tauri Commands 与后端通信
+ * 
+ * 注意：这是简化实现，完整的 Tauri 客户端需要 Tauri 环境支持
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import type { 
-  IApiClient, 
-  ISearchClient, 
-  IDownloadClient, 
-  ICompareClient, 
+import type {
+  ISearchClient,
+  ICompareClient,
+  IDownloadClient,
   IConfigClient,
-  SearchCacheItem,
-  DownloadProgress 
-} from './types';
-import type { Comic, SearchOptions, DownloadOptions, DownloadResult, CompareResult } from '../../types';
+  SearchOptions,
+  SearchResultMetadata,
+  DownloadResult,
+} from './types.js';
+import type { Comic, CompareResult, DownloadProgress, Config } from '../../types/index.js';
 
 /**
- * Tauri IPC 客户端实现
+ * Tauri 搜索客户端（占位实现）
  */
-export class TauriClient implements IApiClient, ISearchClient, IDownloadClient, ICompareClient, IConfigClient {
-  
-  // ==================== 搜索 ====================
-  
-  async search(keyword: string, options?: Partial<SearchOptions>): Promise<Comic[]> {
-    const comics = await invoke<any[]>('search_comics', { keyword });
-    return comics.map(this.mapComicData);
+export class TauriSearchClient implements ISearchClient {
+  async search(keyword: string, options?: SearchOptions): Promise<Comic[]> {
+    // TODO: 使用 Tauri invoke 调用 Rust 命令
+    // const result = await invoke('search_comics', { keyword, ...options });
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
-  async getCacheList(): Promise<SearchCacheItem[]> {
-    return await invoke<any[]>('get_cache_list');
+
+  async getSearchList(): Promise<SearchResultMetadata[]> {
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
-  async deleteCache(keyword: string): Promise<void> {
-    await invoke('delete_cache', { keyword });
+
+  async deleteSearch(keyword: string): Promise<void> {
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
-  // ==================== 对比 ====================
-  
-  async compare(keyword: string, localPath?: string, options?: any): Promise<CompareResult> {
-    const result = await invoke<any>('compare_comics', { 
-      keyword, 
-      localPath 
-    });
-    return this.mapCompareResult(result);
+}
+
+/**
+ * Tauri 对比客户端（占位实现）
+ */
+export class TauriCompareClient implements ICompareClient {
+  async compare(keyword: string, localPath: string): Promise<CompareResult> {
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
-  // ==================== 下载 ====================
-  
-  async download(comics: Comic[], options?: Partial<DownloadOptions>): Promise<DownloadResult> {
-    const result = await invoke<any>('download_comics', {
-      comics: comics.map(c => ({
-        aid: c.aid,
-        title: c.title,
-        coverUrl: c.coverUrl,
-        category: c.category,
-      })),
-      storagePath: options?.storagePath,
-    });
-    return this.mapDownloadResult(result);
+}
+
+/**
+ * Tauri 下载客户端（占位实现）
+ */
+export class TauriDownloadClient implements IDownloadClient {
+  async download(comics: Comic[], storagePath: string): Promise<DownloadResult> {
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
+
   async cancel(aid: string): Promise<void> {
-    await invoke('cancel_download', { aid });
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
+
   onProgress(callback: (progress: DownloadProgress) => void): void {
-    listen<DownloadProgress>('download-progress', (event) => {
-      callback(event.payload);
-    });
+    // TODO: 使用 Tauri 事件监听
+    console.log('Tauri 下载进度监听（占位实现）');
   }
-  
-  onCompleted(callback: (result: DownloadResult) => void): void {
-    listen<DownloadResult>('download-completed', (event) => {
-      callback(this.mapDownloadResult(event.payload));
-    });
+}
+
+/**
+ * Tauri 配置客户端（占位实现）
+ */
+export class TauriConfigClient implements IConfigClient {
+  async getAll(): Promise<Config> {
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
-  onError(callback: (error: Error) => void): void {
-    listen<string>('download-error', (event) => {
-      callback(new Error(event.payload));
-    });
-  }
-  
-  // ==================== 配置 ====================
-  
-  async getAll(): Promise<any> {
-    return await invoke<any>('get_config');
-  }
-  
+
   async get<T>(key: string): Promise<T> {
-    const config = await invoke<any>('get_config');
-    return config[key];
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
-  
+
   async set<T>(key: string, value: T): Promise<void> {
-    await invoke('set_config', { key, value });
-  }
-  
-  // ==================== 辅助方法 ====================
-  
-  private mapComicData(data: any): Comic {
-    return {
-      aid: data.aid,
-      title: data.title,
-      coverUrl: data.coverUrl,
-      category: data.category,
-      author: data.author,
-    };
-  }
-  
-  private mapCompareResult(data: any): CompareResult {
-    return {
-      searchComic: data.searchComic,
-      localComic: data.localComic,
-      matchScore: data.matchScore,
-      status: data.status,
-    };
-  }
-  
-  private mapDownloadResult(data: any): DownloadResult {
-    return {
-      success: data.success,
-      comic: this.mapComicData(data.comic),
-      savedPath: data.savedPath,
-      pages: data.pages,
-      downloadedPages: data.downloadedPages,
-    };
+    throw new Error('Tauri 客户端需要在 Tauri 环境中运行');
   }
 }

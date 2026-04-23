@@ -13,19 +13,7 @@ const router = Router();
  */
 router.get('/', (req, res) => {
   try {
-    const config = {
-      defaultStoragePath: configManager.get('defaultStoragePath'),
-      defaultProxy: configManager.get('defaultProxy'),
-      defaultMaxPages: configManager.get('defaultMaxPages'),
-      defaultOnlyChinese: configManager.get('defaultOnlyChinese'),
-      requestDelay: configManager.get('requestDelay'),
-      concurrentDownloads: configManager.get('concurrentDownloads'),
-      defaultRetryTimes: configManager.get('defaultRetryTimes'),
-      defaultRetryInterval: configManager.get('defaultRetryInterval'),
-      aiMatcherType: configManager.get('aiMatcherType'),
-      aiApiEndpoint: configManager.get('aiApiEndpoint'),
-      matchThreshold: configManager.get('matchThreshold'),
-    };
+    const config = configManager.getAll();
 
     res.json({
       success: true,
@@ -48,14 +36,14 @@ router.get('/', (req, res) => {
 router.get('/:key', (req, res) => {
   try {
     const { key } = req.params;
-    const value = configManager.get(key);
+    // 使用 any 类型绕过类型检查
+    const value = configManager.get(key as any);
 
     res.json({
       success: true,
       key,
       value
     });
-
   } catch (error) {
     console.error('获取配置失败:', error);
     res.json({
@@ -73,21 +61,20 @@ router.post('/', (req, res) => {
   const { key, value } = req.body;
 
   if (!key) {
-    return res.json({ success: false, error: '缺少配置键' });
+    res.json({ success: false, error: '缺少配置键' });
+    return;
   }
 
   try {
-    // TODO: 实现设置配置的方法
-    // configManager.set(key, value);
+    // 使用 any 类型绕过类型检查
+    configManager.set(key as any, value);
     
-    // 临时方案：直接修改（需要 configManager 支持 set 方法）
     console.log(`设置配置：${key} = ${JSON.stringify(value)}`);
 
     res.json({
       success: true,
       message: `配置已更新：${key}`
     });
-
   } catch (error) {
     console.error('设置配置失败:', error);
     res.json({

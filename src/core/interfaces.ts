@@ -3,7 +3,7 @@
  * 为 CLI、Web、Electron 提供统一的调用接口
  */
 
-import type { Comic, SearchOptions, DownloadOptions, DownloadProgress, DownloadResult, CompareOptions, CompareResult } from '../types.js';
+import type { Comic, SearchOptions, DownloadOptions, DownloadProgress, DownloadResult, CompareOptions, CompareResult } from '../types/index.js';
 
 /**
  * 搜索服务接口

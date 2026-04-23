@@ -7,7 +7,7 @@ import { configManager } from '../../config.js';
 import { checkAndInstallDependencies } from '../../setup.js';
 import { wnacgConfig } from '../../config/wnacg.config.js';
 import { SearchManager } from '../../core/search-manager.js';
-import type { Comic, SearchResult } from '../../types.js';
+import type { Comic, SearchResult } from '../../types/index.js';
 import path from 'path';
 
 export const searchCommand = new Command('search')
@@ -19,11 +19,18 @@ export const searchCommand = new Command('search')
   .option('-j, --json', '以 JSON 格式输出', false)
   .option('-f, --force', '强制刷新，不使用缓存', false)
   .option('-d, --delay <ms>', '请求间隔时间（毫秒），覆盖配置')
+  .option('-l, --list', '显示所有搜索结果列表', false)
   .action(async (author: string, options: any) => {
     const ready = await checkAndInstallDependencies();
     if (!ready) {
       console.log(chalk.yellow('\n依赖未安装完成，无法执行搜索。\n'));
       process.exit(1);
+    }
+
+    // 如果指定了 --list 参数，显示所有搜索结果列表
+    if (options.list) {
+      showSearchResultsList();
+      return;
     }
 
     const spinner = ora('初始化中...').start();
@@ -104,4 +111,37 @@ function printResults(comics: Comic[]): void {
   });
 
   console.log(`\n${chalk.green(figures.tick)} 总计：${chalk.bold(comics.length.toString())} 部漫画\n`);
+}
+
+/**
+ * 显示所有搜索结果列表
+ */
+function showSearchResultsList(): void {
+  const cacheDir = path.join(process.cwd(), 'cache');
+  const searchManager = new SearchManager(cacheDir);
+  
+  const metadataList = searchManager.list({ sortBy: 'time', order: 'desc' });
+  
+  if (metadataList.length === 0) {
+    console.log(chalk.yellow('\n暂无搜索结果\n'));
+    return;
+  }
+  
+  console.log('\n' + chalk.bold('搜索结果列表:'));
+  console.log(chalk.dim('─'.repeat(100)) + '\n');
+  
+  metadataList.forEach((metadata, index) => {
+    const num = chalk.cyan(`${String(index + 1).padStart(2, ' ')}`);
+    const keyword = chalk.white(metadata.keyword);
+    const time = chalk.dim(new Date(metadata.searchTime).toLocaleString('zh-CN'));
+    const count = chalk.green(`${metadata.totalComics} 部`);
+    const size = chalk.blue((metadata.fileSize / 1024).toFixed(1) + ' KB');
+    
+    console.log(`${figures.pointer} ${num} ${keyword}`);
+    console.log(`   时间：${time}  |  数量：${count}  |  大小：${size}`);
+    console.log(chalk.dim('─'.repeat(100)));
+  });
+  
+  console.log(`\n${chalk.green(figures.tick)} 总计：${chalk.bold(metadataList.length.toString())} 个搜索结果\n`);
+  console.log(chalk.dim('提示：使用 wnacg-dl search <关键字> 查看具体搜索结果\n'));
 }
