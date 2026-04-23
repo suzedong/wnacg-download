@@ -1,1 +1,0 @@
-impl Future<Output = Result<serde_json::Value, std::string::String>>
