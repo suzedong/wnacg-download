@@ -36,26 +36,17 @@
       </div>
     </div>
 
-    <div v-if="comicsList.length > 0" class="comics-list">
-      <div class="list-header">
-        <h2>搜索结果 ({{ comicsList.length }})</h2>
-        <button @click="addToDownloadQueue" class="primary-btn" :disabled="selectedComics.length === 0">
-          添加选中到下载队列 ({{ selectedComics.length }})
-        </button>
-      </div>
-      <div class="comics-grid">
-        <ComicCard 
-          v-for="comic in comicsList" 
-          :key="comic.aid" 
-          :comic="comic"
-          :selected="selectedComics.includes(comic)"
-          :show-checkbox="true"
-          :show-actions="true"
-          @select="handleComicSelect"
-          @download="handleSingleDownload"
-        />
-      </div>
-    </div>
+    <!-- 搜索结果预览 -->
+    <SearchPreview
+      v-if="comicsList.length > 0"
+      :comics="comicsList"
+      :keyword="searchKeyword"
+      :search-time="searchTime"
+      @re-search="performSearch"
+      @start-compare="switchToCompare"
+      @download-selected="handleDownloadSelected"
+      @download-all="handleDownloadAll"
+    />
 
     <div v-if="comicsList.length === 0 && !isSearching && searchKeyword" class="no-results">
       未找到漫画，请尝试其他关键字。
@@ -65,8 +56,8 @@
 
 <script setup>
 import { ref, inject } from 'vue';
-import ComicCard from '../components/ComicCard.vue';
 import SearchResultList from '../components/SearchResultList.vue';
+import SearchPreview from '../components/SearchPreview.vue';
 import { createClient } from '../adapters';
 
 const emit = defineEmits(['add-to-queue', 'switch-tab']);
@@ -76,10 +67,10 @@ const client = inject('client') || createClient();
 
 const searchKeyword = ref('');
 const comicsList = ref([]);
-const selectedComics = ref([]);
 const isSearching = ref(false);
 const searchError = ref('');
 const showList = ref(false);
+const searchTime = ref(0);
 
 const performSearch = async () => {
   if (!searchKeyword.value) return;
@@ -87,11 +78,14 @@ const performSearch = async () => {
   isSearching.value = true;
   searchError.value = '';
   comicsList.value = [];
-  selectedComics.value = [];
+  searchTime.value = 0;
+  
+  const startTime = Date.now();
   
   try {
-    const response = await client.search(searchKeyword.value);
+    const response = await client.search.search(searchKeyword.value);
     comicsList.value = response;
+    searchTime.value = Date.now() - startTime;
   } catch (error) {
     searchError.value = error.message;
   } finally {
@@ -104,20 +98,20 @@ const showSearchResultList = () => {
 };
 
 const handleSearchResultSelect = async (result) => {
-  // 使用选中的搜索结果加载漫画列表
   console.log('使用搜索结果:', result);
   showList.value = false;
   
   try {
-    // 重新搜索以加载该关键字的漫画
     searchKeyword.value = result.keyword;
     isSearching.value = true;
     searchError.value = '';
     comicsList.value = [];
-    selectedComics.value = [];
+    searchTime.value = 0;
     
-    const response = await client.search(result.keyword);
+    const startTime = Date.now();
+    const response = await client.search.search(result.keyword);
     comicsList.value = response;
+    searchTime.value = Date.now() - startTime;
   } catch (error) {
     searchError.value = error.message;
   } finally {
@@ -126,13 +120,11 @@ const handleSearchResultSelect = async (result) => {
 };
 
 const handleViewDetail = (result) => {
-  // 查看搜索结果详情（目前直接加载）
   console.log('查看详情:', result);
   handleSearchResultSelect(result);
 };
 
 const handleDelete = async (result) => {
-  // 删除搜索结果缓存
   console.log('删除结果:', result);
   try {
     await client.deleteCache(result.keyword);
@@ -142,24 +134,18 @@ const handleDelete = async (result) => {
   }
 };
 
-const handleComicSelect = (comic) => {
-  const index = selectedComics.value.findIndex(c => c.aid === comic.aid);
-  if (index > -1) {
-    selectedComics.value.splice(index, 1);
-  } else {
-    selectedComics.value.push(comic);
-  }
-};
-
-const addToDownloadQueue = () => {
-  emit('add-to-queue', [...selectedComics.value]);
-  selectedComics.value = [];
+const handleDownloadSelected = (comics) => {
+  emit('add-to-queue', comics);
   emit('switch-tab', 'download');
 };
 
-const handleSingleDownload = (comic) => {
-  emit('add-to-queue', [comic]);
+const handleDownloadAll = (comics) => {
+  emit('add-to-queue', comics);
   emit('switch-tab', 'download');
+};
+
+const switchToCompare = () => {
+  emit('switch-tab', 'compare');
 };
 </script>
 
@@ -256,31 +242,6 @@ const handleSingleDownload = (comic) => {
   font-size: 1.1rem;
 }
 
-.comics-list {
-  background: rgba(255, 255, 255, 0.95);
-  padding: 1.5rem;
-  border-radius: 15px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-}
-
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.list-header h2 {
-  margin: 0;
-  color: #333;
-}
-
-.comics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1.5rem;
-}
-
 /* 弹窗样式 */
 .modal-overlay {
   position: fixed;
@@ -362,16 +323,6 @@ const handleSingleDownload = (comic) => {
 
   .form-label {
     font-size: 1.1rem;
-  }
-
-  .comics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .list-header {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: stretch;
   }
 }
 </style>

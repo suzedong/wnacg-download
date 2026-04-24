@@ -1,7 +1,6 @@
 <template>
   <header class="header">
     <div class="header-left">
-      <button class="back-btn" @click="handleBack">←</button>
       <h1>🎨 WNACG Downloader</h1>
     </div>
     <nav>
@@ -25,7 +24,7 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(['tab-change', 'back']);
+const emit = defineEmits(['tab-change']);
 
 const tabs = [
   { id: 'search', label: '搜索', icon: '🔍' },
@@ -36,10 +35,6 @@ const tabs = [
 
 const handleTabChange = (tabId) => {
   emit('tab-change', tabId);
-};
-
-const handleBack = () => {
-  emit('back');
 };
 </script>
 

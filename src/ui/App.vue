@@ -7,27 +7,29 @@
     />
 
     <main class="main">
-      <SearchView
-        v-show="activeTab === 'search'"
-        @add-to-queue="handleAddToQueue"
-        @switch-tab="activeTab = $event"
-      />
+      <div class="main-content">
+        <SearchView
+          v-show="activeTab === 'search'"
+          @add-to-queue="handleAddToQueue"
+          @switch-tab="activeTab = $event"
+        />
 
-      <CompareView
-        v-show="activeTab === 'compare'"
-        @download-comics="handleDownloadComics"
-      />
+        <CompareView
+          v-show="activeTab === 'compare'"
+          @download-comics="handleDownloadComics"
+        />
 
-      <DownloadView
-        v-show="activeTab === 'download'"
-        :queue="downloadQueue"
-        @update:queue="downloadQueue = $event"
-        @start-download="handleStartDownload"
-      />
+        <DownloadView
+          v-show="activeTab === 'download'"
+          :queue="downloadQueue"
+          @update:queue="downloadQueue = $event"
+          @start-download="handleStartDownload"
+        />
 
-      <ConfigView
-        v-show="activeTab === 'config'"
-      />
+        <ConfigView
+          v-show="activeTab === 'config'"
+        />
+      </div>
     </main>
 
     <Footer />
@@ -91,25 +93,45 @@ const handleStartDownload = async (comics) => {
 
 <style scoped>
 .app {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  overflow: hidden;
 }
 
 .main {
   flex: 1;
-  padding: 2rem;
+  overflow-y: auto;
+  width: 100%;
+}
+
+.main-content {
   max-width: 1400px;
   margin: 0 auto;
-  width: 100%;
+  padding: 2rem;
   box-sizing: border-box;
 }
 
 @media (max-width: 768px) {
-  .main {
+  .main-content {
     padding: 1rem;
   }
+}
+</style>
+
+<style>
+/* 全局样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
 </style>

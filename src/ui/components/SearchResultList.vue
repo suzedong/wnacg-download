@@ -1,15 +1,12 @@
 <template>
   <div class="search-result-list">
-    <div class="list-header">
-      <h2>📚 搜索结果列表</h2>
-      <div class="filter-box">
-        <input
-          type="text"
-          v-model="filterKeyword"
-          placeholder="🔍 过滤关键字..."
-          class="filter-input"
-        />
-      </div>
+    <div class="filter-box">
+      <input
+        type="text"
+        v-model="filterKeyword"
+        placeholder="🔍 过滤关键字..."
+        class="filter-input"
+      />
     </div>
 
     <div v-if="loading" class="loading">
@@ -46,7 +43,7 @@
           <span class="keyword-text">{{ item.keyword }}</span>
         </div>
         <div class="col-time">{{ formatTime(item.searchTime) }}</div>
-        <div class="col-count">{{ item.totalComics }} 部</div>
+        <div class="col-count">{{ item.comicCount || 0 }} 部</div>
         <div class="col-size">{{ formatSize(item.fileSize) }}</div>
         <div class="col-actions">
           <button
@@ -86,9 +83,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, inject } from 'vue';
+import { createClient } from '../adapters';
 
 const emit = defineEmits(['select', 'view', 'delete']);
+
+// 注入客户端实例
+const client = inject('client') || createClient();
 
 const loading = ref(true);
 const searchResults = ref([]);
@@ -99,7 +100,7 @@ const selectedIndex = ref(-1);
 const loadResults = async () => {
   loading.value = true;
   try {
-    const results = await window.electronAPI.getSearchResultList();
+    const results = await client.search.getSearchList();
     searchResults.value = results;
     if (results.length > 0) {
       selectedIndex.value = 0; // 默认选中第一个
@@ -135,7 +136,7 @@ const viewDetail = (item) => {
 const deleteResult = async (item) => {
   if (confirm(`确定要删除 "${item.keyword}" 的搜索结果吗？`)) {
     try {
-      await window.electronAPI.deleteSearchResult(item.keyword);
+      await client.search.deleteSearch(item.keyword);
       await loadResults(); // 重新加载列表
       emit('delete', item);
     } catch (error) {
@@ -195,28 +196,13 @@ defineExpose({
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
 
-.list-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-}
-
-.list-header h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #333;
-}
-
 .filter-box {
-  flex: 1;
-  max-width: 300px;
-  margin-left: auto;
+  margin-bottom: 1.2rem;
 }
 
 .filter-input {
   width: 100%;
-  padding: 0.6rem 1rem;
+  padding: 0.7rem 1rem;
   border: 2px solid #e0e0e0;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -246,20 +232,33 @@ defineExpose({
   display: grid;
   grid-template-columns: 2fr 2fr 1fr 1fr 1.5fr;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.9rem 1rem;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.table-header .col-keyword,
+.table-header .col-time,
+.table-header .col-count,
+.table-header .col-size,
+.table-header .col-actions {
+  color: white;
 }
 
 .table-row {
   display: grid;
   grid-template-columns: 2fr 2fr 1fr 1fr 1.5fr;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.9rem 1rem;
   border-bottom: 1px solid #f0f0f0;
   cursor: pointer;
   transition: background 0.2s;
+}
+
+.table-row:last-child {
+  border-bottom: none;
 }
 
 .table-row:hover {
@@ -332,7 +331,7 @@ defineExpose({
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 1.5rem;
+  margin-top: 1.2rem;
   padding-top: 1rem;
   border-top: 2px solid #f0f0f0;
 }

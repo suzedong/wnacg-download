@@ -44,7 +44,7 @@ export class WebSearchClient implements ISearchClient {
   }
 
   async getSearchList(): Promise<SearchResultMetadata[]> {
-    const response = await fetch(`${API_BASE_URL}/cache/list`);
+    const response = await fetch(`${API_BASE_URL}/cache`);
     
     if (!response.ok) {
       throw new Error('获取搜索结果列表失败');

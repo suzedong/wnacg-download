@@ -85,23 +85,21 @@ app.use(notFoundHandler);
 // 启动服务器
 app.listen(PORT, () => {
   console.log(`
-╔════════════════════════════════════════════════════════╗
-║          WNACG API 服务器已启动                        ║
-╠════════════════════════════════════════════════════════╣
-║  本地访问：http://localhost:${PORT}                    ║
-║  测试页面：http://localhost:${PORT}/test-search.html   ║
-║                                                        ║
-║  API 端点:                                             ║
-║  POST /api/search         - 搜索漫画                   ║
-║  GET  /api/cache/list     - 获取缓存列表               ║
-║  DELETE /api/cache/:key   - 删除缓存                   ║
-║  POST /api/compare        - 对比漫画                   ║
-║  POST /api/download       - 下载漫画                   ║
-║  POST /api/download/cancel - 取消下载                  ║
-║  GET  /api/config         - 获取所有配置               ║
-║  GET  /api/config/:key    - 获取配置项                 ║
-║  POST /api/config         - 设置配置项                 ║
-║  GET  /api/health         - 健康检查                   ║
-╚════════════════════════════════════════════════════════╝
-  `);
+🚀 WNACG API 服务器已启动
+
+📍 本地访问：http://localhost:${PORT}
+🧪 测试页面：http://localhost:${PORT}/test-search.html
+
+📡 API 端点:
+  POST /api/search          - 搜索漫画
+  GET  /api/cache/list      - 获取缓存列表
+  DELETE /api/cache/:key    - 删除缓存
+  POST /api/compare         - 对比漫画
+  POST /api/download        - 下载漫画
+  POST /api/download/cancel - 取消下载
+  GET  /api/config          - 获取所有配置
+  GET  /api/config/:key     - 获取配置项
+  POST /api/config          - 设置配置项
+  GET  /api/health          - 健康检查
+`);
 });
