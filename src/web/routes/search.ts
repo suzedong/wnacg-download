@@ -16,7 +16,7 @@ const router = Router();
  * 搜索漫画
  */
 router.post('/', async (req, res) => {
-  const { keyword, maxPages = 1, onlyChinese = true, force = false } = req.body;
+  const { keyword, maxPages, onlyChinese = true, force = false } = req.body;
 
   if (!keyword) {
     return res.json({ success: false, error: '请输入关键字' });
@@ -47,7 +47,7 @@ router.post('/', async (req, res) => {
 
     const comics = await scraper.search({
       author: keyword,
-      maxPages: parseInt(maxPages.toString()),
+      maxPages: maxPages ? parseInt(maxPages.toString()) : undefined,
       onlyChinese,
       requestDelay: configManager.get('requestDelay'),
     });

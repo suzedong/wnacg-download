@@ -48,7 +48,7 @@
       @download-all="handleDownloadAll"
     />
 
-    <div v-if="comicsList.length === 0 && !isSearching && searchKeyword" class="no-results">
+    <div v-if="comicsList.length === 0 && !isSearching && hasSearched" class="no-results">
       未找到漫画，请尝试其他关键字。
     </div>
   </div>
@@ -71,6 +71,7 @@ const isSearching = ref(false);
 const searchError = ref('');
 const showList = ref(false);
 const searchTime = ref(0);
+const hasSearched = ref(false);
 
 const performSearch = async () => {
   if (!searchKeyword.value) return;
@@ -79,11 +80,12 @@ const performSearch = async () => {
   searchError.value = '';
   comicsList.value = [];
   searchTime.value = 0;
+  hasSearched.value = true;
   
   const startTime = Date.now();
   
   try {
-    const response = await client.search.search(searchKeyword.value);
+    const response = await client.search.search(searchKeyword.value, { force: true });
     comicsList.value = response;
     searchTime.value = Date.now() - startTime;
   } catch (error) {

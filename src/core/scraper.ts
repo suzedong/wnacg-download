@@ -4,6 +4,7 @@ import type { Comic, SearchOptions } from '../types/index.js';
 import { SiteConfig } from '../types/config.js';
 import winston from 'winston';
 import type { ISearchService } from './interfaces.js';
+import { configManager } from '../config.js';
 
 const createLogger = () => winston.createLogger({
   level: 'info',
@@ -189,6 +190,14 @@ export class WNACGScraper implements ISearchService {
     const comics: Comic[] = [];
     let totalPages = 1;
 
+    // 显示搜索配置
+    getLogger().info(`搜索配置:`);
+    getLogger().info(`  关键字: ${author}`);
+    getLogger().info(`  代理: ${this.proxy || '无'}`);
+    getLogger().info(`  最大页数: ${maxPages || '不限制'}`);
+    getLogger().info(`  请求间隔: ${configManager.get('requestDelay')}ms`);
+    getLogger().info(`  仅汉化版: ${onlyChinese ? '是' : '否'}`);
+
     // 先获取第一页，提取总页数
     getLogger().info('正在爬取第 1 页...');
     const firstPageUrl = this.buildSearchUrl(author, 1);
@@ -243,6 +252,11 @@ export class WNACGScraper implements ISearchService {
       }
     }
     
+    // 解析第一页的漫画
+    const firstPageCount = comics.length;
+    await this.parseComicPage(html, comics, onlyChinese, author);
+    getLogger().info(`第 1 页找到 ${comics.length - firstPageCount} 部漫画`);
+    
     const remainingPages = pagesToCrawl - 1; // 已经爬取了第一页
 
     if (remainingPages > 0) {
@@ -273,7 +287,7 @@ export class WNACGScraper implements ISearchService {
           const pageHtml = await newPage.content();
           await newPage.close();
           
-          return pageHtml;
+          return { pageNum, html: pageHtml };
         } catch (error) {
           getLogger().error(`Error crawling page ${url}: ${error}`);
           return null;
@@ -281,12 +295,14 @@ export class WNACGScraper implements ISearchService {
       });
 
       // 等待所有页面爬取完成
-      const pageContents = await Promise.all(pagePromises);
+      const pageResults = await Promise.all(pagePromises);
       
       // 解析每个页面的漫画信息
-      for (const pageContent of pageContents) {
-        if (pageContent) {
-          await this.parseComicPage(pageContent, comics, onlyChinese, author);
+      for (const result of pageResults) {
+        if (result) {
+          const countBefore = comics.length;
+          await this.parseComicPage(result.html, comics, onlyChinese, author);
+          getLogger().info(`第 ${result.pageNum} 页找到 ${comics.length - countBefore} 部漫画`);
         }
       }
     }

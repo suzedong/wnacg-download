@@ -16,7 +16,7 @@
       </div>
       <div class="stat-item" v-if="searchTime">
         <span class="stat-label">搜索耗时</span>
-        <span class="stat-value">{{ searchTime }}ms</span>
+        <span class="stat-value">{{ (searchTime / 1000).toFixed(1) }}s</span>
       </div>
     </div>
 

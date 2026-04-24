@@ -9,8 +9,8 @@ export const wnacgConfig: SiteConfig = {
   },
   selectors: {
     searchResult: {
-      comicBox: ['li:has(a[href*="aid-"])'],
-      fallbackSelectors: ['li', 'div.gallery-item', 'div.item'],
+      comicBox: ['li'],
+      fallbackSelectors: ['div.gallery-item', 'div.item', 'div.grid_cell'],
       titleLink: 'a[href*="aid-"]',
       coverImage: 'img',
       categoryClass: '[class*="cate-"]',
