@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import figures from 'figures';
-import { WNACGScraper } from '../../core/scraper.js';
 import { configManager } from '../../config.js';
 import { checkAndInstallDependencies } from '../../setup.js';
 import { wnacgConfig } from '../../config/wnacg.config.js';
@@ -10,9 +9,17 @@ import { SearchManager } from '../../core/search-manager.js';
 import type { Comic, SearchResult } from '../../types/index.js';
 import path from 'path';
 
+// 在导入 scraper 之前检查是否需要 JSON 模式
+if (process.argv.includes('--json') || process.argv.includes('-j')) {
+  process.env.JSON_MODE = 'true';
+}
+
+import { WNACGScraper } from '../../core/scraper.js';
+import winston from 'winston';
+
 export const searchCommand = new Command('search')
   .description('在 wnacg.com 上搜索漫画')
-  .argument('<author>', '作者或关键字')
+  .argument('[author]', '作者或关键字（使用 --list 时不需要）')
   .option('-p, --pages <number>', '最大爬取页数 (不指定则爬取全部)')
   .option('-P, --proxy <url>', '代理地址')
   .option('-a, --all', '包含所有漫画 (不仅汉化版)', false)
@@ -20,9 +27,23 @@ export const searchCommand = new Command('search')
   .option('-f, --force', '强制刷新，不使用缓存', false)
   .option('-d, --delay <ms>', '请求间隔时间（毫秒），覆盖配置')
   .option('-l, --list', '显示所有搜索结果列表', false)
-  .action(async (author: string, options: any) => {
+  .action(async (author: string | undefined, options: any) => {
+    // 在 JSON 模式下，临时禁用 console.log 和 chalk 颜色
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalChalkLevel = chalk.level;
+    
+    if (options.json) {
+      console.log = () => {};
+      console.warn = () => {};
+      chalk.level = 0; // 禁用颜色
+    }
+    
     const ready = await checkAndInstallDependencies();
     if (!ready) {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      chalk.level = originalChalkLevel;
       console.log(chalk.yellow('\n依赖未安装完成，无法执行搜索。\n'));
       process.exit(1);
     }
@@ -33,14 +54,25 @@ export const searchCommand = new Command('search')
       return;
     }
 
-    const spinner = ora('初始化中...').start();
+    // 检查是否提供了 author 参数
+    if (!author) {
+      console.log(chalk.yellow('\n错误：请提供作者或关键字\n'));
+      console.log(chalk.dim('示例：'));
+      console.log(chalk.dim('  node dist/cli/index.js search TYPE90'));
+      console.log(chalk.dim('  node dist/cli/index.js search --list\n'));
+      process.exit(1);
+    }
+
+    const spinner = options.json ? null : ora('初始化中...').start();
     const scraper = new WNACGScraper(wnacgConfig, options.proxy || configManager.get('defaultProxy'), false); // 默认使用非无头模式
 
     try {
       // 使用命令行指定的 delay 或配置中的 delay
       const requestDelay = options.delay ? parseInt(options.delay, 10) : configManager.get('requestDelay');
 
-      spinner.text = `正在搜索 "${author}"...`;
+      if (spinner) {
+        spinner.text = `正在搜索 "${author}"...`;
+      }
       
       const startTime = Date.now();
       const comics = await scraper.search({
@@ -51,7 +83,9 @@ export const searchCommand = new Command('search')
       });
       const duration = Date.now() - startTime;
 
-      spinner.succeed(`找到 ${comics.length} 部漫画（耗时 ${(duration / 1000).toFixed(1)} 秒）`);
+      if (spinner) {
+        spinner.succeed(`找到 ${comics.length} 部漫画（耗时 ${(duration / 1000).toFixed(1)} 秒）`);
+      }
 
       // 使用 SearchManager 保存结果
       const cacheDir = path.join(process.cwd(), 'cache');
@@ -75,11 +109,14 @@ export const searchCommand = new Command('search')
       searchManager.save(author, result);
       const cacheFile = path.join(cacheDir, `search_${author.replace(/[<>:"/\\|?*]/g, '_')}.json`);
       
-      console.log(`
+      if (!options.json) {
+        // 只在非 JSON 模式下显示保存信息
+        console.log(`
 ${chalk.green('✓')} 漫画信息已保存到：${chalk.cyan(cacheFile)}`);
+      }
 
       if (options.json) {
-        // JSON 输出模式
+        // JSON 输出模式 - 只输出纯 JSON，无任何其他信息
         const output = {
           success: true,
           keyword: author,
@@ -87,6 +124,10 @@ ${chalk.green('✓')} 漫画信息已保存到：${chalk.cyan(cacheFile)}`);
           totalComics: comics.length,
           comics,
         };
+        // 恢复 console.log 和 chalk
+        console.log = originalLog;
+        console.warn = originalWarn;
+        chalk.level = originalChalkLevel;
         console.log(JSON.stringify(output, null, 2));
       } else {
         printResults(comics);
@@ -94,7 +135,16 @@ ${chalk.green('✓')} 漫画信息已保存到：${chalk.cyan(cacheFile)}`);
 
       await scraper.close();
     } catch (error) {
-      spinner.fail('搜索失败');
+      // 恢复 console.log 和 chalk
+      if (options.json) {
+        console.log = originalLog;
+        console.warn = originalWarn;
+        chalk.level = originalChalkLevel;
+      }
+      
+      if (spinner) {
+        spinner.fail('搜索失败');
+      }
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(chalk.red(`错误：${errorMessage}`));
       console.error(chalk.dim('提示：检查网络连接或稍后重试'));

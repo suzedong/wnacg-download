@@ -5,8 +5,9 @@ import { SiteConfig } from '../types/config.js';
 import winston from 'winston';
 import type { ISearchService } from './interfaces.js';
 
-const logger = winston.createLogger({
+const createLogger = () => winston.createLogger({
   level: 'info',
+  silent: process.env.JSON_MODE === 'true', // JSON 模式下完全静音
   transports: [
     new winston.transports.Console({
       format: winston.format.combine(
@@ -16,6 +17,15 @@ const logger = winston.createLogger({
     }),
   ],
 });
+
+let _logger: winston.Logger | null = null;
+
+const getLogger = () => {
+  if (!_logger) {
+    _logger = createLogger();
+  }
+  return _logger;
+};
 
 export class WNACGScraper implements ISearchService {
   private browser: Browser | null = null;
@@ -100,8 +110,8 @@ export class WNACGScraper implements ISearchService {
       // 检查是否需要验证码
       const captchaElement = await this.page.$('#cf-captcha-container');
       if (captchaElement) {
-        logger.info('需要手动完成 Cloudflare 验证码');
-        logger.info('请在浏览器中完成验证码，然后按 Enter 继续...');
+        getLogger().info('需要手动完成 Cloudflare 验证码');
+        getLogger().info('请在浏览器中完成验证码，然后按 Enter 继续...');
         
         // 等待用户完成验证码
         await new Promise(resolve => {
@@ -116,7 +126,7 @@ export class WNACGScraper implements ISearchService {
       // 检查是否有挑战页面
       const challengeElement = await this.page.$('.cf-challenge-form');
       if (challengeElement) {
-        logger.info('检测到 Cloudflare 挑战，等待自动解决...');
+        getLogger().info('检测到 Cloudflare 挑战，等待自动解决...');
         
         // 尝试点击挑战按钮
         const challengeButton = await this.page.$('.cf-button');
@@ -132,7 +142,7 @@ export class WNACGScraper implements ISearchService {
       // 检查是否有等待页面
       const waitingElement = await this.page.$('.cf-waiting-room');
       if (waitingElement) {
-        logger.info('检测到 Cloudflare 等待页面，等待...');
+        getLogger().info('检测到 Cloudflare 等待页面，等待...');
         
         // 等待页面重定向
         await this.page.waitForNavigation({ timeout: 120000 });
@@ -180,12 +190,12 @@ export class WNACGScraper implements ISearchService {
     let totalPages = 1;
 
     // 先获取第一页，提取总页数
-    logger.info('正在爬取第 1 页...');
+    getLogger().info('正在爬取第 1 页...');
     const firstPageUrl = this.buildSearchUrl(author, 1);
 
     if (!this.page) throw new Error('Page not initialized');
     
-    logger.info(`正在从网站获取第 1 页...`);
+    getLogger().info(`正在从网站获取第 1 页...`);
     await this.page.goto(firstPageUrl, { 
       waitUntil: 'networkidle',
       timeout: 60000
@@ -221,7 +231,7 @@ export class WNACGScraper implements ISearchService {
     
     if (pageNumbers.length > 0) {
       totalPages = Math.max(...pageNumbers);
-      logger.info(`共找到 ${totalPages} 页`);
+      getLogger().info(`共找到 ${totalPages} 页`);
     }
 
     // 计算实际需要爬取的页数（考虑 maxPages 限制）
@@ -229,14 +239,14 @@ export class WNACGScraper implements ISearchService {
     if (maxPages && maxPages > 0) {
       pagesToCrawl = Math.min(totalPages, maxPages);
       if (pagesToCrawl < totalPages) {
-        logger.info(`限制爬取 ${maxPages} 页，实际爬取 ${pagesToCrawl} 页（共 ${totalPages} 页）`);
+        getLogger().info(`限制爬取 ${maxPages} 页，实际爬取 ${pagesToCrawl} 页（共 ${totalPages} 页）`);
       }
     }
     
     const remainingPages = pagesToCrawl - 1; // 已经爬取了第一页
 
     if (remainingPages > 0) {
-      logger.info(`正在并行爬取剩余 ${remainingPages} 页...`);
+      getLogger().info(`正在并行爬取剩余 ${remainingPages} 页...`);
       
       // 生成剩余页面的 URL
       const pageUrls = [];
@@ -251,7 +261,7 @@ export class WNACGScraper implements ISearchService {
           if (!newPage) throw new Error('Failed to create new page');
           
           const pageNum = url.split('&p=')[1];
-          logger.info(`正在从网站获取第 ${pageNum} 页...`);
+          getLogger().info(`正在从网站获取第 ${pageNum} 页...`);
           await newPage.goto(url, { 
             waitUntil: 'networkidle',
             timeout: 60000
@@ -265,7 +275,7 @@ export class WNACGScraper implements ISearchService {
           
           return pageHtml;
         } catch (error) {
-          logger.error(`Error crawling page ${url}: ${error}`);
+          getLogger().error(`Error crawling page ${url}: ${error}`);
           return null;
         }
       });
@@ -281,7 +291,7 @@ export class WNACGScraper implements ISearchService {
       }
     }
 
-    logger.info(`共找到 ${comics.length} 部漫画`);
+    getLogger().info(`共找到 ${comics.length} 部漫画`);
     return comics;
   }
 
@@ -308,7 +318,7 @@ export class WNACGScraper implements ISearchService {
     }
     
     if (comicBoxes.length === 0) {
-      logger.warn('No comics found on this page');
+      getLogger().warn('No comics found on this page');
       return;
     }
 
@@ -350,7 +360,7 @@ export class WNACGScraper implements ISearchService {
       if (cateMatch) {
         const cateId = cateMatch[1];
         category = this.getCategoryByCateId(cateId);
-        logger.debug(`Found category via element class: ${category} (cate-${cateId})`);
+        getLogger().debug(`Found category via element class: ${category} (cate-${cateId})`);
       } else {
         // 2. 查找包含 cate-* 类名的子元素
         const cateElement = $element.find(selectors.categoryClass);
@@ -360,7 +370,7 @@ export class WNACGScraper implements ISearchService {
           if (cateMatch) {
             const cateId = cateMatch[1];
             category = this.getCategoryByCateId(cateId);
-            logger.debug(`Found category via child element: ${category} (cate-${cateId})`);
+            getLogger().debug(`Found category via child element: ${category} (cate-${cateId})`);
           }
         }
       }
@@ -376,7 +386,7 @@ export class WNACGScraper implements ISearchService {
             fullText.includes('中国翻訳') || fullText.includes('中文') ||
             fullText.includes('dl 版')) {
           category = '單行本／漢化';
-          logger.debug(`Found category via text: 漢化`);
+          getLogger().debug(`Found category via text: 漢化`);
         } else if (!onlyChinese) {
           // 如果不要求只搜索汉化版，给一个默认分类
           category = '未知分类';
@@ -388,7 +398,7 @@ export class WNACGScraper implements ISearchService {
         const isChinese = category.includes('漢化') || category.includes('汉化') || 
                          title.includes('漢化') || title.includes('汉化');
         if (!isChinese) {
-          logger.debug(`Skipping non-Chinese comic: ${title}`);
+          getLogger().debug(`Skipping non-Chinese comic: ${title}`);
           return;
         }
       }
@@ -457,7 +467,7 @@ export class WNACGScraper implements ISearchService {
         pages: pages.length > 0 ? Math.max(...pages) : undefined,
       };
     } catch (error) {
-      logger.error(`Failed to get details for aid ${aid}: ${error}`);
+      getLogger().error(`Failed to get details for aid ${aid}: ${error}`);
       return null;
     }
   }
