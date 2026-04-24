@@ -7,7 +7,14 @@
     <img v-else :src="comic.coverUrl" :alt="comic.title" class="comic-cover" />
     <div class="comic-info">
       <h3 class="comic-title" :title="comic.title">{{ comic.title }}</h3>
-      <p class="comic-category">{{ comic.category }}</p>
+      <p class="comic-meta-info">
+        <span v-if="comic.author" class="comic-author">✍️ {{ comic.author }}</span>
+        <span class="comic-category">{{ comic.category }}</span>
+      </p>
+      <p class="comic-meta">
+        <span v-if="comic.imageCount">🖼️ {{ comic.imageCount }} 张</span>
+        <span v-if="comic.createdAt" class="comic-date">📅 {{ comic.createdAt }}</span>
+      </p>
       <div class="comic-actions" v-if="showActions">
         <a :href="comic.url" target="_blank" class="comic-link">查看详情</a>
         <button @click="handleDownload" class="small-btn">下载</button>
@@ -102,10 +109,34 @@ const handleDownload = () => {
   -webkit-box-orient: vertical;
 }
 
+.comic-meta-info {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.85rem;
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.comic-author {
+  color: #666;
+}
+
 .comic-category {
-  margin: 0 0 1rem 0;
-  font-size: 0.8rem;
   color: #888;
+}
+
+.comic-meta {
+  margin: 0 0 0.8rem 0;
+  font-size: 0.8rem;
+  color: #999;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.comic-date {
+  color: #aaa;
 }
 
 .comic-actions {

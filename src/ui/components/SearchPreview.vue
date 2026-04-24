@@ -7,12 +7,12 @@
         <span class="stat-value">{{ comics.length }}</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">总页数</span>
-        <span class="stat-value">{{ totalPages }}</span>
+        <span class="stat-label">去重后</span>
+        <span class="stat-value">{{ deduplicatedCount }}</span>
       </div>
       <div class="stat-item">
-        <span class="stat-label">已选中</span>
-        <span class="stat-value">{{ selectedComics.length }}</span>
+        <span class="stat-label">总图片数</span>
+        <span class="stat-value">{{ totalImages }}</span>
       </div>
       <div class="stat-item" v-if="searchTime">
         <span class="stat-label">搜索耗时</span>
@@ -117,8 +117,13 @@ const showOverwriteConfirm = ref(false);
 const showLoading = ref(false);
 const searchError = ref('');
 
-const totalPages = computed(() => {
-  return props.comics.reduce((sum, comic) => sum + (comic.pages || 0), 0);
+const totalImages = computed(() => {
+  return props.comics.reduce((sum, comic) => sum + (comic.imageCount || 0), 0);
+});
+
+const deduplicatedCount = computed(() => {
+  const uniqueTitles = new Set(props.comics.map(c => c.title));
+  return uniqueTitles.size;
 });
 
 const handleComicSelect = (comic) => {

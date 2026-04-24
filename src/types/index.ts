@@ -11,6 +11,8 @@ export interface Comic {
   url: string;
   coverUrl?: string;
   pages?: number;
+  imageCount?: number;
+  createdAt?: string;
   tags?: string[];
 }
 

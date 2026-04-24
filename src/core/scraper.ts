@@ -426,6 +426,28 @@ export class WNACGScraper implements ISearchService {
         coverUrl = coverEl.attr('src') || '';
       }
 
+      // 提取图片数和创建时间
+      let imageCount: number | undefined;
+      let createdAt: string | undefined;
+      
+      // 查找 info_col 元素
+      const infoCol = $element.find('.info_col');
+      if (infoCol.length > 0) {
+        const infoText = infoCol.text().trim();
+        
+        // 提取图片数：例如 "218張圖片"
+        const imageMatch = infoText.match(/(\d+)張圖片/);
+        if (imageMatch) {
+          imageCount = parseInt(imageMatch[1]);
+        }
+        
+        // 提取创建时间：例如 "創建於2025-09-09 01:00:57"
+        const dateMatch = infoText.match(/創建於(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
+        if (dateMatch) {
+          createdAt = dateMatch[1];
+        }
+      }
+
       // 构建完整的漫画 URL
       const comicUrl = urlEl.startsWith('http') ? urlEl : `${this.config.baseUrl}${urlEl}`;
 
@@ -437,6 +459,8 @@ export class WNACGScraper implements ISearchService {
         category,
         url: comicUrl,
         coverUrl,
+        imageCount,
+        createdAt,
       });
       
       // 记录已添加的 aid
