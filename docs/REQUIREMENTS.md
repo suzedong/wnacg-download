@@ -242,6 +242,107 @@ wnacg-dl search --list
 - 搜索完成后显示前 10 部漫画预览
 - 提示用户下一步操作
 
+#### 2.1.8 CLI 搜索命令
+
+**命令格式**：
+```bash
+wnacg-dl search <author> [options]
+
+参数:
+  author               作者或关键字（使用 --list 时不需要）
+
+选项:
+  -p, --pages <number> 最大爬取页数（可选，默认不限制）
+  -P, --proxy <url>    代理地址（可选）
+  -a, --all            包含所有漫画（不仅汉化版，可选）
+  -j, --json           以 JSON 格式输出（可选）
+  -f, --force          强制刷新，不使用缓存（可选）
+  -d, --delay <ms>     请求间隔时间（毫秒，覆盖配置，可选）
+  -l, --list           显示所有搜索结果列表（可选）
+```
+
+**使用示例**：
+```bash
+# 搜索漫画（不限制页数）
+wnacg-dl search TYPE90
+
+# 搜索漫画（限制页数）
+wnacg-dl search TYPE90 --pages 2
+
+# JSON 输出（支持管道操作）
+wnacg-dl search TYPE90 --json | jq '.totalComics'
+
+# 查看搜索结果列表
+wnacg-dl search --list
+
+# 强制刷新缓存
+wnacg-dl search TYPE90 --force
+
+# 使用代理
+wnacg-dl search TYPE90 --proxy http://127.0.0.1:7890
+
+# 自定义请求间隔
+wnacg-dl search TYPE90 --delay 2000
+```
+
+**JSON 输出格式**：
+```json
+{
+  "success": true,
+  "keyword": "TYPE90",
+  "searchTime": "2026-04-24T02:00:00.000Z",
+  "totalComics": 81,
+  "comics": [
+    {
+      "aid": "123456",
+      "title": "漫画标题",
+      "coverUrl": "https://...",
+      "category": "單行本／漢化",
+      "author": "TYPE90",
+      "pages": 20
+    }
+  ]
+}
+```
+
+**搜索结果列表输出**：
+```bash
+$ wnacg-dl search --list
+
+搜索结果列表:
+  1. TYPE90
+     搜索时间：2026-04-24 10:16:33
+     漫画数量：69 部  |  文件大小：20.6 KB
+  2. 汉化
+     搜索时间：2026-04-14 10:28:54
+     漫画数量：0 部  |  文件大小：0.0 KB
+
+✔ 总计：2 个搜索结果
+
+提示：
+  - 使用 wnacg-dl search <关键字> 查看具体搜索结果
+  - 使用 wnacg-dl compare <关键字> 对比本地漫画
+  - 使用 wnacg-dl download <关键字> 下载漫画
+```
+
+**错误提示**：
+```bash
+# 未提供作者参数
+$ wnacg-dl search
+
+错误：请提供作者或关键字
+
+示例：
+  wnacg-dl search TYPE90
+  wnacg-dl search --list
+
+# 搜索结果已存在
+$ wnacg-dl search TYPE90
+
+⚠ 关键字 "TYPE90" 的搜索结果已存在。
+使用 --force 选项强制覆盖缓存。
+```
+
 ---
 
 ### 2.2 功能 2：对比本地漫画
@@ -427,7 +528,7 @@ cache/compare_{keyword}_{timestamp}.json
 ### 3.1 配置项清单
 1. **默认存储路径**：漫画下载存储路径
 2. **代理地址**：网络代理地址（可选）
-3. **最大爬取页数**：搜索时最大爬取页数（默认 5）
+3. **最大爬取页数**：搜索时最大爬取页数（默认 0，表示不限制）
 4. **请求间隔**：请求间隔时间（毫秒，**默认 1000**）
 5. **并发下载数**：并发下载数量（1-10，默认 3）
 6. **只搜索汉化版漫画**：布尔值（默认 true）

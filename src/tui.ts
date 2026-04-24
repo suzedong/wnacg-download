@@ -18,11 +18,10 @@ export async function runTUI(): Promise<void> {
   }
   
   console.clear();
-  console.log(chalk.bold.cyan('\n╔══════════════════════════════════════════════════════════╗'));
-  console.log(chalk.bold.cyan('║') + '          ' + chalk.white.bold('WNACG 漫画下载工具') + '                          ' + chalk.bold.cyan('║'));
-  console.log(chalk.bold.cyan('║') + '                                                                              ' + chalk.bold.cyan('║'));
-  console.log(chalk.bold.cyan('║') + '          ' + chalk.dim('交互式模式') + '                                      ' + chalk.bold.cyan('║'));
-  console.log(chalk.bold.cyan('╚══════════════════════════════════════════════════════════╝\n'));
+  console.log(chalk.bold.cyan('\n========================================'));
+  console.log(chalk.bold.cyan('        WNACG 漫画下载工具'));
+  console.log(chalk.dim('              交互式模式'));
+  console.log(chalk.bold.cyan('========================================\n'));
 
   const { action } = await inquirer.prompt([
     {
@@ -71,12 +70,16 @@ async function searchFlow(): Promise<void> {
     },
   ]);
 
+  // 获取配置中的默认页数，并格式化显示
+  const configMaxPages = configManager.get('defaultMaxPages');
+  const displayDefault = configMaxPages === 0 ? '不限制' : configMaxPages.toString();
+  
   const { maxPages } = await inquirer.prompt([
     {
       type: 'number',
       name: 'maxPages',
       message: '最大爬取页数:',
-      default: 5,
+      default: configMaxPages,
     },
   ]);
 
@@ -255,6 +258,37 @@ async function downloadFlow(): Promise<void> {
 async function configFlow(): Promise<void> {
   const config = configManager.getAll();
   
+  // 配置项名称映射（英文 -> 中文）
+  const configNames: Record<string, string> = {
+    defaultStoragePath: '默认存储路径',
+    defaultProxy: '默认代理',
+    defaultMaxPages: '最大爬取页数',
+    defaultOnlyChinese: '仅汉化版',
+    requestDelay: '请求间隔（毫秒）',
+    concurrentDownloads: '并发下载数',
+    downloadRetryTimes: '下载重试次数',
+    downloadRetryDelay: '重试间隔（秒）',
+    aiModelType: 'AI 模型类型',
+    aiModelApiUrl: 'AI 模型 API 地址',
+    matchThreshold: 'AI 匹配阈值',
+  };
+  
+  // 配置值格式化
+  const formatValue = (key: string, value: any): string => {
+    if (value === undefined) return '未设置';
+    if (key === 'defaultMaxPages' && value === 0) return '不限制';
+    if (key === 'aiModelType') {
+      return value === 'local' ? '本地模型' : '远程 API';
+    }
+    if (key === 'defaultOnlyChinese') {
+      return value ? '是' : '否';
+    }
+    if (key.includes('Delay') || key.includes('Interval')) {
+      return `${value}ms`;
+    }
+    return String(value);
+  };
+  
   const { action } = await inquirer.prompt([
     {
       type: 'list',
@@ -271,7 +305,9 @@ async function configFlow(): Promise<void> {
   if (action === 'view') {
     console.log('\n当前配置:');
     Object.entries(config).forEach(([key, value]) => {
-      console.log(`  ${chalk.cyan(key)}: ${chalk.green(value)}`);
+      const chineseName = configNames[key] || key;
+      const formattedValue = formatValue(key, value);
+      console.log(`  ${chalk.cyan(chineseName)}: ${chalk.green(formattedValue)}`);
     });
     console.log('\n');
   } else if (action === 'setup') {
