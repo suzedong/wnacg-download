@@ -6,7 +6,6 @@
   "build": {
     "frontendDist": "../dist/ui",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev:ui",
     "beforeBuildCommand": "npm run build:ui"
   },
   "app": {
@@ -24,12 +23,19 @@
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": [],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "windows": {
       "wix": null,
       "nsis": {

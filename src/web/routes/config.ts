@@ -11,7 +11,7 @@ const router = Router();
  * GET /
  * 获取所有配置
  */
-router.get('/', (req, res) => {
+router.get('/', (_req, res) => {
   try {
     const config = configManager.getAll();
 

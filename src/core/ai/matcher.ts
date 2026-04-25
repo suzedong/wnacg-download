@@ -173,7 +173,7 @@ export class ComicMatcher implements IAIMatcherService {
   }
 
   // 校准漫画名称（以第三方为准）（接口要求的方法）
-  calibrateName(searchName: string, thirdPartyName: string): string {
+  calibrateName(_searchName: string, thirdPartyName: string): string {
     // 简单实现：返回第三方名称
     // 可以根据需要实现更复杂的逻辑
     return thirdPartyName;

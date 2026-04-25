@@ -111,7 +111,8 @@ const handleSearchResultSelect = async (result) => {
     searchTime.value = 0;
     
     const startTime = Date.now();
-    const response = await client.search.search(result.keyword);
+    // 直接读取缓存，不重新搜索
+    const response = await client.search.getCachedComics(result.keyword);
     comicsList.value = response;
     searchTime.value = Date.now() - startTime;
   } catch (error) {

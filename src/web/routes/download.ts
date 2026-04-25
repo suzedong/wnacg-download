@@ -5,7 +5,6 @@
 import { Router } from 'express';
 import { Downloader } from '../../core/downloader.js';
 import { configManager } from '../../config.js';
-import { wnacgConfig } from '../../config/wnacg.config.js';
 
 const router = Router();
 

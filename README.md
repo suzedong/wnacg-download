@@ -247,7 +247,7 @@ wnacg-dl search <author> [options]
   <author>              作者或关键字
 
 选项:
-  -p, --pages <number>  最大爬取页数 (默认：5)
+  -p, --pages <number>  最大爬取页数 (默认：0，不限制)
   -P, --proxy <url>     代理 URL
   -a, --all            包含所有漫画 (不仅汉化版)
   -j, --json           以 JSON 格式输出
@@ -264,7 +264,7 @@ wnacg-dl compare <author> [options]
 选项:
   -s, --storage <path>  存储路径
   -S, --subdir <name>   子目录名
-  -p, --pages <number>  最大爬取页数
+  -p, --pages <number>  最大爬取页数 (默认：0，不限制)
   -P, --proxy <url>     代理 URL
   -a, --all            包含所有漫画
   -j, --json           以 JSON 格式输出
@@ -281,7 +281,7 @@ wnacg-dl download <author> [options]
 选项:
   -s, --storage <path>  存储路径
   -S, --subdir <name>   子目录名
-  -p, --pages <number>  最大爬取页数
+  -p, --pages <number>  最大爬取页数 (默认：0，不限制)
   -P, --proxy <url>     代理 URL
   -a, --all            包含所有漫画
   -y, --yes            跳过确认直接下载

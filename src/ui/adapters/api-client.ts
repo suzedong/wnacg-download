@@ -21,25 +21,39 @@ const API_BASE_URL = 'http://localhost:3000/api';
  */
 export class WebSearchClient implements ISearchClient {
   async search(keyword: string, options?: SearchOptions): Promise<Comic[]> {
-    const response = await fetch(`${API_BASE_URL}/search`, {
+    const params = new URLSearchParams();
+    if (options) {
+      if (options.maxPages !== undefined) params.append('maxPages', String(options.maxPages));
+      if (options.onlyChinese !== undefined) params.append('onlyChinese', String(options.onlyChinese));
+      if (options.force !== undefined) params.append('force', String(options.force));
+    }
+
+    const response = await fetch(`/api/search?${params}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        keyword,
-        maxPages: options?.maxPages,
-        onlyChinese: options?.onlyChinese,
-        force: options?.force,
-      }),
+      body: JSON.stringify({ keyword }),
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as { error?: string };
       throw new Error(error.error || '搜索失败');
     }
 
-    const data = await response.json();
+    const data = await response.json() as { comics: Comic[] };
+    return data.comics;
+  }
+
+  async getCachedComics(keyword: string): Promise<Comic[]> {
+    const response = await fetch(`/api/cache/comics/${encodeURIComponent(keyword)}`);
+
+    if (!response.ok) {
+      const error = await response.json() as { error?: string };
+      throw new Error(error.error || '获取缓存失败');
+    }
+
+    const data = await response.json() as { comics: Comic[] };
     return data.comics;
   }
 
@@ -50,7 +64,7 @@ export class WebSearchClient implements ISearchClient {
       throw new Error('获取搜索结果列表失败');
     }
 
-    const data = await response.json();
+    const data = await response.json() as { files: SearchResultMetadata[] };
     return data.files;
   }
 
@@ -79,11 +93,11 @@ export class WebCompareClient implements ICompareClient {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as { error?: string };
       throw new Error(error.error || '对比失败');
     }
 
-    return await response.json();
+    return await response.json() as CompareResult;
   }
 }
 
@@ -103,11 +117,11 @@ export class WebDownloadClient implements IDownloadClient {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json() as { error?: string };
       throw new Error(error.error || '下载失败');
     }
 
-    return await response.json();
+    return await response.json() as DownloadResult;
   }
 
   async cancel(aid: string): Promise<void> {
@@ -139,7 +153,7 @@ export class WebDownloadClient implements IDownloadClient {
       try {
         const response = await fetch(`${API_BASE_URL}/download/progress`);
         if (response.ok) {
-          const progress = await response.json();
+          const progress = await response.json() as DownloadProgress;
           if (this.progressCallback) {
             this.progressCallback(progress);
           }
@@ -162,7 +176,7 @@ export class WebConfigClient implements IConfigClient {
       throw new Error('获取配置失败');
     }
 
-    return await response.json();
+    return await response.json() as Config;
   }
 
   async get<T>(key: string): Promise<T> {
@@ -172,7 +186,7 @@ export class WebConfigClient implements IConfigClient {
       throw new Error(`获取配置项 ${key} 失败`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as { value?: T };
     return data.value as T;
   }
 

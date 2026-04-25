@@ -15,7 +15,6 @@ if (process.argv.includes('--json') || process.argv.includes('-j')) {
 }
 
 import { WNACGScraper } from '../../core/scraper.js';
-import winston from 'winston';
 
 export const searchCommand = new Command('search')
   .description('在 wnacg.com 上搜索漫画')

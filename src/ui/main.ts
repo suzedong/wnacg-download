@@ -3,6 +3,7 @@
  * 创建 Vue 应用并挂载到 #app
  */
 
+// @ts-ignore - Vue 3 支持 createApp
 import { createApp } from 'vue';
 import App from './App.vue';
 

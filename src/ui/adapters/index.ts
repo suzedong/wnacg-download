@@ -1,45 +1,123 @@
 /**
- * 适配器层统一导出
- * 提供客户端工厂函数，自动检测环境并创建合适的客户端
+ * 适配器层入口
+ * 根据运行环境自动选择适配器
  */
 
-import type { IClientFactory } from './types.js';
-import {
-  WebSearchClient,
-  WebCompareClient,
-  WebDownloadClient,
-  WebConfigClient,
-} from './api-client.js';
-import {
-  TauriSearchClient,
-  TauriCompareClient,
-  TauriDownloadClient,
-  TauriConfigClient,
-} from './tauri-client.js';
+import { WebSearchClient, WebCompareClient, WebDownloadClient, WebConfigClient } from './api-client.js';
+import type {
+  ISearchClient,
+  ICompareClient,
+  IDownloadClient,
+  IConfigClient,
+} from './types.js';
 
 /**
- * 检测当前运行环境
+ * 检测是否在 Tauri 环境中
  */
-function detectEnvironment(): 'web' | 'tauri' {
-  // 检测是否在 Tauri 环境中
-  // @ts-ignore - Tauri 的 __TAURI__ 全局变量
-  if (typeof window !== 'undefined' && window.__TAURI__) {
-    return 'tauri';
-  }
-  return 'web';
+function isTauriEnvironment(): boolean {
+  // @ts-ignore - window 在浏览器环境中存在
+  return typeof window !== 'undefined' && '__TAURI__' in window;
 }
 
 /**
- * 创建客户端工厂
- * 自动检测环境并返回合适的客户端实现
+ * Tauri 搜索客户端（使用全局 window.__TAURI__）
  */
-export function createClient(): IClientFactory {
-  const env = detectEnvironment();
-  
-  console.log(`当前环境：${env === 'web' ? 'Web' : 'Tauri'}`);
-  
-  if (env === 'tauri') {
-    // Tauri 环境
+class TauriSearchClient implements ISearchClient {
+  private invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+    // @ts-ignore - window.__TAURI__ 在 Tauri 环境中存在
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
+
+  async search(keyword: string, options?: any): Promise<any[]> {
+    return this.invoke('search_comics', {
+      keyword,
+      options: {
+        maxPages: options?.maxPages,
+        onlyChinese: options?.onlyChinese,
+        force: options?.force,
+      },
+    });
+  }
+
+  async getCachedComics(keyword: string): Promise<any[]> {
+    return this.invoke('get_cached_comics', { keyword });
+  }
+
+  async getSearchList(): Promise<any[]> {
+    return this.invoke('get_cache_list');
+  }
+
+  async deleteSearch(keyword: string): Promise<void> {
+    return this.invoke('delete_cache', { keyword });
+  }
+}
+
+/**
+ * Tauri 对比客户端
+ */
+class TauriCompareClient implements ICompareClient {
+  private invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+    // @ts-ignore - window.__TAURI__ 在 Tauri 环境中存在
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
+
+  async compare(keyword: string, localPath: string): Promise<any> {
+    return this.invoke('compare_comics', { keyword, localPath });
+  }
+}
+
+/**
+ * Tauri 下载客户端
+ */
+class TauriDownloadClient implements IDownloadClient {
+  private invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+    // @ts-ignore - window.__TAURI__ 在 Tauri 环境中存在
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
+
+  async download(comics: any[], storagePath: string): Promise<any> {
+    return this.invoke('download_comics', { comics, storagePath });
+  }
+
+  async cancel(aid: string): Promise<void> {
+    return this.invoke('cancel_download', { aid });
+  }
+
+  // @ts-ignore - callback 将在后续实现中使用
+  onProgress(_callback: (progress: any) => void): void {
+    // 将在后续实现
+  }
+}
+
+/**
+ * Tauri 配置客户端
+ */
+class TauriConfigClient implements IConfigClient {
+  private invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+    // @ts-ignore - window.__TAURI__ 在 Tauri 环境中存在
+    return window.__TAURI__.core.invoke(cmd, args);
+  }
+
+  async getAll(): Promise<any> {
+    return this.invoke('get_config');
+  }
+
+  async get<T>(key: string): Promise<T> {
+    const config = await this.invoke<any>('get_config');
+    return config[key];
+  }
+
+  async set<T>(key: string, value: T): Promise<void> {
+    return this.invoke('set_config', { key, value });
+  }
+}
+
+/**
+ * 创建客户端实例
+ * 根据运行环境自动选择 Web 或 Tauri 适配器
+ */
+export function createClient() {
+  if (isTauriEnvironment()) {
     return {
       search: new TauriSearchClient(),
       compare: new TauriCompareClient(),
@@ -47,7 +125,6 @@ export function createClient(): IClientFactory {
       config: new TauriConfigClient(),
     };
   } else {
-    // Web 环境
     return {
       search: new WebSearchClient(),
       compare: new WebCompareClient(),
@@ -57,33 +134,8 @@ export function createClient(): IClientFactory {
   }
 }
 
-/**
- * 手动创建 Web 客户端
- */
-export function createWebClient(): IClientFactory {
-  return {
-    search: new WebSearchClient(),
-    compare: new WebCompareClient(),
-    download: new WebDownloadClient(),
-    config: new WebConfigClient(),
-  };
-}
-
-/**
- * 手动创建 Tauri 客户端
- */
-export function createTauriClient(): IClientFactory {
-  return {
-    search: new TauriSearchClient(),
-    compare: new TauriCompareClient(),
-    download: new TauriDownloadClient(),
-    config: new TauriConfigClient(),
-  };
-}
-
-// 导出所有类型
+// 导出类型
 export type {
-  IClientFactory,
   ISearchClient,
   ICompareClient,
   IDownloadClient,
@@ -91,20 +143,4 @@ export type {
   SearchOptions,
   SearchResultMetadata,
   DownloadResult,
-  ClientType,
 } from './types.js';
-
-// 导出所有客户端类
-export {
-  WebSearchClient,
-  WebCompareClient,
-  WebDownloadClient,
-  WebConfigClient,
-} from './api-client.js';
-
-export {
-  TauriSearchClient,
-  TauriCompareClient,
-  TauriDownloadClient,
-  TauriConfigClient,
-} from './tauri-client.js';

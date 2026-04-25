@@ -1,9 +1,9 @@
 /**
  * 核心业务模块接口定义
- * 为 CLI、Web、Electron 提供统一的调用接口
+ * 为 CLI、Web、Tauri 提供统一的调用接口
  */
 
-import type { Comic, SearchOptions, DownloadOptions, DownloadProgress, DownloadResult, CompareOptions, CompareResult } from '../types/index.js';
+import type { Comic, SearchOptions, DownloadProgress, CompareResult } from '../types/index.js';
 
 /**
  * 搜索服务接口

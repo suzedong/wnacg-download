@@ -6,7 +6,7 @@
 - **核心功能**: 搜索、对比、下载汉化漫画
 - **架构特点**: 
   - 核心业务逻辑完全复用
-  - Web 和 Electron 共享 UI 组件（复用率 > 95%）
+  - Web 和 Tauri 共享 UI 组件（复用率 > 95%）
   - 适配器模式统一通信接口
 
 ---
@@ -130,7 +130,7 @@ const emit = defineEmits(['select', 'download']);
 - 遵循 [`docs/UI-DESIGN.md`](../docs/UI-DESIGN.md) 中的设计稿
 - 保持界面一致性
 - 响应式布局
-- **Web 和 Electron 共享 UI 组件**
+- **Web 和 Tauri 共享 UI 组件**
 
 ### 样式规范
 - 使用 scoped 样式
@@ -142,12 +142,12 @@ const emit = defineEmits(['select', 'download']);
 - 可复用组件放在 `src/ui/components/`
 - 页面组件放在 `src/ui/views/`
 - 组件命名使用 PascalCase
-- **Web 和 Electron 完全复用**
+- **Web 和 Tauri 完全复用**
 
 ### 适配器模式
 - **适配器层**：`src/ui/adapters/`
 - **Web API 客户端**：`api-client.ts`
-- **Electron IPC 客户端**：`electron-client.ts`
+- **Tauri IPC 客户端**：`tauri-client.ts`
 - **UI 组件无感知通信方式**
 
 ---

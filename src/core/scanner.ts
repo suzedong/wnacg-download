@@ -51,6 +51,7 @@ export class Scanner implements IScannerService {
     }
   }
 
+  // @ts-ignore - 为未来扩展保留
   private _isComicFile(filename: string): boolean {
     const comicExtensions = [
       '.zip',
@@ -66,6 +67,7 @@ export class Scanner implements IScannerService {
     return comicExtensions.includes(ext);
   }
 
+  // @ts-ignore - 为未来扩展保留
   private _extractTitle(filename: string): string {
     const name = path.basename(filename, path.extname(filename));
     return name

@@ -72,7 +72,7 @@ async function searchFlow(): Promise<void> {
 
   // 获取配置中的默认页数，并格式化显示
   const configMaxPages = configManager.get('defaultMaxPages');
-  const displayDefault = configMaxPages === 0 ? '不限制' : configMaxPages.toString();
+  // const _displayDefault = configMaxPages === 0 ? '不限制' : configMaxPages.toString();
   
   const { maxPages } = await inquirer.prompt([
     {

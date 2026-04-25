@@ -17,6 +17,12 @@ export interface ISearchClient {
   search(keyword: string, options?: SearchOptions): Promise<Comic[]>;
   
   /**
+   * 获取缓存的漫画
+   * @param keyword 关键字
+   */
+  getCachedComics(keyword: string): Promise<Comic[]>;
+  
+  /**
    * 获取搜索结果列表
    */
   getSearchList(): Promise<SearchResultMetadata[]>;

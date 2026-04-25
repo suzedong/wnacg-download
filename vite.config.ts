@@ -5,6 +5,7 @@ import path from 'path';
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
+  root: 'src/ui',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src/ui'),
@@ -12,7 +13,7 @@ export default defineConfig({
   },
   base: '/',
   build: {
-    outDir: 'dist/ui',
+    outDir: '../../dist/ui',
     emptyOutDir: true,
   },
   server: {
@@ -24,5 +25,8 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+  },
+  optimizeDeps: {
+    exclude: ['@tauri-apps/api'],
   },
 });

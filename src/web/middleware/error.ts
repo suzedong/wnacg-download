@@ -10,9 +10,9 @@ import { Request, Response, NextFunction } from 'express';
  */
 export function errorHandler(
   err: Error,
-  req: Request,
+  _req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void {
   console.error('错误处理中间件:', err);
 
@@ -49,7 +49,7 @@ export function errorHandler(
 export function notFoundHandler(
   req: Request,
   res: Response,
-  next: NextFunction
+  _next: NextFunction
 ): void {
   res.status(404).json({
     success: false,
