@@ -47,6 +47,7 @@ pub struct DownloadCompleteEvent {
 
 /// 错误事件
 #[derive(Clone, Serialize)]
+#[allow(dead_code)]
 pub struct ErrorEvent {
     /// 错误消息
     pub message: String,
@@ -73,6 +74,7 @@ pub fn emit_download_complete(app: &tauri::AppHandle, event: DownloadCompleteEve
 }
 
 /// 发送错误事件
+#[allow(dead_code)]
 pub fn emit_error(app: &tauri::AppHandle, event: ErrorEvent) {
     let _ = app.emit("error", event);
 }

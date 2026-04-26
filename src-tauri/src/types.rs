@@ -94,6 +94,7 @@ pub mod download {
 
     /// 下载进度
     #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[allow(dead_code)]
     pub struct DownloadProgress {
         /// 任务 ID
         pub task_id: String,

@@ -27,6 +27,7 @@ pub fn send_download_complete(app: &tauri::AppHandle, success: u32, failed: u32)
 }
 
 /// 发送错误通知
+#[allow(dead_code)]
 pub fn send_error_notification(app: &tauri::AppHandle, error: &str) {
     send_notification(app, "错误", error);
 }

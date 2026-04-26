@@ -15,6 +15,7 @@ pub enum AppError {
     JsonError(#[from] serde_json::Error),
 
     #[error("HTML 解析错误：{0}")]
+    #[allow(dead_code)]
     ParseError(String),
 
     #[error("AI 匹配错误：{0}")]

@@ -1,4 +1,4 @@
-// 下载器模�?
+// 下载器模块
 use crate::error::AppError;
 use crate::events::{self, DownloadCompleteEvent, DownloadProgressEvent};
 use crate::notification;
@@ -11,24 +11,29 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// 下载器配�?#[derive(Clone)]
+/// 下载器配置
+#[derive(Clone)]
 pub struct DownloaderConfig {
-    /// 并发下载�?    pub concurrent: u32,
+    /// 并发下载数
+    pub concurrent: u32,
     /// 重试次数
     pub retry_times: u32,
-    /// 重试间隔（秒�?    pub retry_interval: u64,
+    /// 重试间隔（秒）
+    pub retry_interval: u64,
     /// 代理设置
     pub proxy: Option<String>,
     pub proxy_enabled: bool,
 }
 
-/// 下载�?pub struct Downloader {
+/// 下载器
+pub struct Downloader {
     client: Client,
     config: DownloaderConfig,
 }
 
 impl Downloader {
-    /// 创建新的下载�?    pub fn new(config: DownloaderConfig) -> Result<Self, AppError> {
+    /// 创建新的下载器
+    pub fn new(config: DownloaderConfig) -> Result<Self, AppError> {
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(300))
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
@@ -51,18 +56,18 @@ impl Downloader {
         app: &tauri::AppHandle,
         tasks: Vec<DownloadTask>,
     ) -> Result<DownloadResult, AppError> {
-        println!("⬇️ 开始批量下载：{} 部漫�?, tasks.len());
+        println!("⬇️ 开始批量下载：{} 部漫画", tasks.len());
 
         let success = Arc::new(AtomicUsize::new(0));
         let failed = Arc::new(Mutex::new(Vec::new()));
         let success_list = Arc::new(Mutex::new(Vec::new()));
 
-        // 限制并发�?        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.config.concurrent as usize));
-        let total_tasks = tasks.len();
+        // 限制并发数
+        let semaphore = Arc::new(tokio::sync::Semaphore::new(self.config.concurrent as usize));
 
         let mut handles = vec![];
 
-        for (index, task) in tasks.into_iter().enumerate() {
+        for (_index, task) in tasks.into_iter().enumerate() {
             let client = self.client.clone();
             let config = self.config.clone();
             let app = app.clone();
@@ -92,7 +97,8 @@ impl Downloader {
             handles.push(handle);
         }
 
-        // 等待所有任务完�?        for handle in handles {
+        // 等待所有任务完成
+        for handle in handles {
             let _ = handle.await;
         }
 
@@ -107,7 +113,8 @@ impl Downloader {
             failed_list,
         };
 
-        // 发送下载完成事�?        events::emit_download_complete(
+        // 发送下载完成事件
+        events::emit_download_complete(
             app,
             DownloadCompleteEvent {
                 success: result.success,
@@ -119,7 +126,7 @@ impl Downloader {
         notification::send_download_complete(app, result.success, result.failed);
 
         println!(
-            "�?批量下载完成：成�?{} 部，失败 {} �?,
+            "✅ 批量下载完成：成功 {} 部，失败 {} 部",
             result.success, result.failed
         );
 
@@ -141,15 +148,17 @@ impl Downloader {
             fs::create_dir_all(&save_dir)?;
         }
 
-        // 获取漫画详情�?        let detail_html = Self::fetch_with_retry(client, config, &task.url, 0).await?;
+        // 获取漫画详情页
+        let detail_html = Self::fetch_with_retry(client, config, &task.url, 0).await?;
 
         // 解析图片链接
         let image_urls = Self::parse_image_urls(&detail_html)?;
         let total_images = image_urls.len();
 
-        println!("📄 {} �?{} 张图�?, task.title, total_images);
+        println!("📄 {} 共 {} 张图片", task.title, total_images);
 
-        // 下载所有图�?        for (index, image_url) in image_urls.iter().enumerate() {
+        // 下载所有图片
+        for (index, image_url) in image_urls.iter().enumerate() {
             let file_name = format!("{:03}.jpg", index + 1);
             let file_path = save_dir.join(&file_name);
 
@@ -185,7 +194,8 @@ impl Downloader {
                 }
             }
 
-            // 发送进度事�?            let progress = ((index + 1) as f64 / total_images as f64) * 100.0;
+            // 发送进度事件
+            let progress = ((index + 1) as f64 / total_images as f64) * 100.0;
             events::emit_download_progress(
                 app,
                 DownloadProgressEvent {
@@ -197,7 +207,7 @@ impl Downloader {
             );
         }
 
-        println!("�?{} 下载完成", task.title);
+        println!("✅ {} 下载完成", task.title);
 
         Ok(())
     }
@@ -252,11 +262,13 @@ impl Downloader {
         let document = Html::parse_document(html);
         let mut urls = vec![];
 
-        // 查找所有图�?        let img_selector = Selector::parse("img").unwrap();
+        // 查找所有图片
+        let img_selector = Selector::parse("img").unwrap();
 
         for img in document.select(&img_selector) {
             if let Some(src) = img.value().attr("src") {
-                // 过滤缩略图，只下载大�?                if !src.contains("thumb") {
+                // 过滤缩略图，只下载大图
+                if !src.contains("thumb") {
                     let url = if src.starts_with("//") {
                         format!("https:{}", src)
                     } else if src.starts_with("/") {
@@ -270,7 +282,7 @@ impl Downloader {
         }
 
         if urls.is_empty() {
-            return Err(AppError::DownloadError("未找到图片链�?.to_string()));
+            return Err(AppError::DownloadError("未找到图片链接".to_string()));
         }
 
         Ok(urls)

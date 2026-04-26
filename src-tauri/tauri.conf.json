@@ -21,14 +21,10 @@
         "resizable": true,
         "fullscreen": false,
         "center": true,
-        "decorations": false,
-        "transparent": true
+        "visible": true
       }
     ],
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    },
+    "trayIcon": null,
     "security": {
       "csp": null
     }

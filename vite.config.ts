@@ -7,9 +7,6 @@ export default defineConfig({
   // Tauri 配置
   build: {
     outDir: './dist',
-    rollupOptions: {
-      input: './src/index.html',
-    },
   },
   // 开发服务器配置
   server: {

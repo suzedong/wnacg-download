@@ -8,7 +8,11 @@
   - **前端**：Vue 3 + TypeScript + Vite
   - **后端**：Rust + Tokio（Tauri 2 框架）
   - **通信**：Tauri Commands + Events
-  - **特性**：无边框窗口、系统托盘、暗色模式、侧边栏导航
+  - **特性**：系统托盘、暗色模式、侧边栏导航、跨平台窗口适配
+- **平台适配**:
+  - **macOS**: 使用系统标题栏（原生控制按钮）
+  - **Windows**: 使用系统标题栏（原生控制按钮）
+  - **统一方案**: 所有平台都使用系统标题栏，不显示自定义 Header
 
 ---
 
@@ -130,8 +134,9 @@ const emit = defineEmits(['select', 'download']);
 ### 设计原则
 - 遵循 [`docs/UI-DESIGN.md`](../docs/UI-DESIGN.md) 中的设计稿
 - 保持界面一致性
-- 桌面端优化（无边框窗口、侧边栏导航）
+- 桌面端优化（系统标题栏、侧边栏导航）
 - 支持暗色模式
+- 跨平台适配（macOS/Windows 统一使用系统标题栏）
 
 ### 样式规范
 - 使用 scoped 样式

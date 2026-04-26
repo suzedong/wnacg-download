@@ -13,6 +13,7 @@ pub struct AiMatcher {
     client: Client,
     api_url: String,
     api_key: Option<String>,
+    #[allow(dead_code)]
     match_threshold: f64,
 }
 

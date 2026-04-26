@@ -13,7 +13,7 @@ mod types;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Manager, WindowEvent,
+    Manager,
 };
 
 /// 窗口控制命令
@@ -58,7 +58,7 @@ fn main() {
             let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
 
-            // 创建系统托盘
+            // 创建系统托盘（使用 TrayIconBuilder 创建，不重复创建）
             let _tray = TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
@@ -106,14 +106,7 @@ fn main() {
             window_maximize,
             window_close,
         ])
-        .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                // 阻止关闭，改为隐藏到托盘
-                api.prevent_close();
-                let _ = window.hide();
-                println!("🛑 窗口已隐藏到托盘");
-            }
-        })
+
         .run(tauri::generate_context!())
         .expect("运行 Tauri 应用失败");
 }

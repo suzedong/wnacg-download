@@ -1,6 +1,5 @@
 <template>
   <div class="app-container">
-    <Header />
     <div class="main-layout">
       <Sidebar :current-view="currentView" @view-change="handleViewChange" />
       <main class="main-content">
@@ -15,7 +14,6 @@
 
 <script setup>
 import { ref } from 'vue';
-import Header from './components/Header.vue';
 import Sidebar from './components/Sidebar.vue';
 import SearchView from './views/SearchView.vue';
 import CompareView from './views/CompareView.vue';
@@ -69,18 +67,22 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .main-layout {
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 0;
 }
 
 .main-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px;
   background: var(--bg-primary);
+  min-height: 0;
 }
 </style>
