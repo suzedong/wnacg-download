@@ -1,9 +1,0 @@
-export { default as Header } from './components/Header.vue';
-export { default as Footer } from './components/Footer.vue';
-export { default as ComicCard } from './components/ComicCard.vue';
-export { default as StatCard } from './components/StatCard.vue';
-export { default as QueueItem } from './components/QueueItem.vue';
-export { default as SearchView } from './views/SearchView.vue';
-export { default as CompareView } from './views/CompareView.vue';
-export { default as DownloadView } from './views/DownloadView.vue';
-export { default as ConfigView } from './views/ConfigView.vue';

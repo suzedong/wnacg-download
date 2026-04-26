@@ -2,12 +2,13 @@
 
 ## 项目信息
 - **名称**: WNACG Downloader
-- **产品形态**: CLI + Web 应用 + 桌面客户端三架构
+- **产品形态**: 桌面客户端（Windows & macOS）
 - **核心功能**: 搜索、对比、下载汉化漫画
-- **架构特点**: 
-  - 核心业务逻辑完全复用
-  - Web 和 Tauri 共享 UI 组件（复用率 > 95%）
-  - 适配器模式统一通信接口
+- **技术架构**: 
+  - **前端**：Vue 3 + TypeScript + Vite
+  - **后端**：Rust + Tokio（Tauri 2 框架）
+  - **通信**：Tauri Commands + Events
+  - **特性**：无边框窗口、系统托盘、暗色模式、侧边栏导航
 
 ---
 
@@ -129,26 +130,20 @@ const emit = defineEmits(['select', 'download']);
 ### 设计原则
 - 遵循 [`docs/UI-DESIGN.md`](../docs/UI-DESIGN.md) 中的设计稿
 - 保持界面一致性
-- 响应式布局
-- **Web 和 Tauri 共享 UI 组件**
+- 桌面端优化（无边框窗口、侧边栏导航）
+- 支持暗色模式
 
 ### 样式规范
 - 使用 scoped 样式
 - 遵循配色方案（紫色渐变 #667eea → #764ba2）
-- 响应式设计（支持移动端）
-- 卡片样式：白色半透明背景 + 圆角 + 阴影
+- 支持亮色/暗色主题切换
+- 卡片样式：白色/深色背景 + 圆角 + 阴影
 
 ### 组件规范
-- 可复用组件放在 `src/ui/components/`
-- 页面组件放在 `src/ui/views/`
+- 可复用组件放在 `src/components/`
+- 页面组件放在 `src/views/`
 - 组件命名使用 PascalCase
-- **Web 和 Tauri 完全复用**
-
-### 适配器模式
-- **适配器层**：`src/ui/adapters/`
-- **Web API 客户端**：`api-client.ts`
-- **Tauri IPC 客户端**：`tauri-client.ts`
-- **UI 组件无感知通信方式**
+- 侧边栏导航组件：`Sidebar.vue`
 
 ---
 
@@ -296,20 +291,20 @@ alert('Download complete!');
 2. 阅读任务的验收标准
    ↓ 明确完成标准
    
-3. 阅读 requirements/spec.md 相关章节
+3. 阅读 docs/REQUIREMENTS.md 相关章节
    ↓ 理解功能需求
    
-4. 阅读 architecture/spec.md 相关章节
+4. 阅读 docs/ARCHITECTURE.md 相关章节
    ↓ 理解架构设计
    
 5. 开始编码
-   ↓ 遵守本规范
+   ↓ 遵守本规范（TypeScript/Rust/Vue）
    
 6. 自我验证
    ↓ 对照验收标准检查
    
 7. 运行测试
-   ↓ npm test
+   ↓ cargo test / npm test
    
 8. 提交代码
    ↓ git commit -m "feat: xxx"
@@ -325,10 +320,10 @@ alert('Download complete!');
 | **开发规范** | 本文档 | `dev-rules.md` |
 | **需求规格** | 功能需求详细描述 | `docs/REQUIREMENTS.md` |
 | **架构设计** | 技术实现方案 | `docs/ARCHITECTURE.md` |
-| **界面设计** | UI 设计、共享策略、适配器模式 | `docs/UI-DESIGN.md` |
+| **界面设计** | UI 设计、桌面端优化、暗色模式 | `docs/UI-DESIGN.md` |
 | **开发计划** | 任务清单和验收标准 | `docs/DEVELOPMENT_PLAN.md` |
 
 ---
 
-**最后更新**: 2026-04-14  
-**版本**: v3.0（三架构 AI 开发版）
+**最后更新**: 2026-04-26  
+**版本**: v4.0（纯桌面端重构版）

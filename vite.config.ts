@@ -1,32 +1,25 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import path from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [vue()],
-  root: 'src/ui',
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src/ui'),
+  // Tauri 配置
+  build: {
+    outDir: './dist',
+    rollupOptions: {
+      input: './src/index.html',
     },
   },
-  base: '/',
-  build: {
-    outDir: '../../dist/ui',
-    emptyOutDir: true,
-  },
+  // 开发服务器配置
   server: {
     port: 5173,
     strictPort: true,
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
   },
-  optimizeDeps: {
-    exclude: ['@tauri-apps/api'],
+  // 解析配置
+  resolve: {
+    alias: {
+      '@': '/src',
+    },
   },
 });

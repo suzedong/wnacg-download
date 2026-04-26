@@ -1,87 +1,118 @@
+// WNACG Downloader - Tauri 2 主入口
+
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 mod commands;
+mod config;
+mod error;
+mod events;
+mod notification;
+mod types;
 
-use tauri::Manager;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use std::process::Command;
-use std::net::TcpStream;
-use std::thread;
-use std::time::Duration;
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    Manager, WindowEvent,
+};
 
-/// 等待 Node.js 服务启动
-fn wait_for_service(port: u16, max_retries: u32) -> bool {
-    for i in 0..max_retries {
-        if TcpStream::connect(("127.0.0.1", port)).is_ok() {
-            println!("✅ Node.js 服务已就绪（尝试 {} 次）", i + 1);
-            return true;
-        }
-        println!("⏳ 等待 Node.js 服务启动... ({}/{})", i + 1, max_retries);
-        thread::sleep(Duration::from_millis(1000));
+/// 窗口控制命令
+#[tauri::command]
+fn window_minimize(window: tauri::Window) {
+    let _ = window.minimize();
+}
+
+#[tauri::command]
+fn window_maximize(window: tauri::Window) {
+    if window.is_maximized().unwrap_or(false) {
+        let _ = window.unmaximize();
+    } else {
+        let _ = window.maximize();
     }
-    false
+}
+
+#[tauri::command]
+fn window_close(window: tauri::Window) {
+    let _ = window.hide();
 }
 
 fn main() {
-    // 启动 Node.js API 服务器
-    println!("🚀 正在启动 Node.js API 服务器...");
-    
-    // 获取项目根目录（src-tauri 的父目录）
-    let current_dir = std::env::current_dir().expect("获取当前目录失败");
-    let project_root = current_dir.parent().expect("获取项目根目录失败");
-    
-    let node_process = Command::new("node")
-        .current_dir(project_root) // 设置工作目录为项目根目录
-        .arg(project_root.join("scripts").join("api-server.js"))
-        .arg("3001") // 端口 3001，避免与 Web 应用冲突
-        .spawn()
-        .expect("❌ 启动 Node.js 服务失败，请确保已安装 Node.js");
-    
-    let node_process = Arc::new(Mutex::new(Some(node_process)));
-    
-    // 等待服务启动
-    if !wait_for_service(3001, 30) {
-        panic!("❌ Node.js 服务启动超时（30 秒）");
-    }
-    
-    println!("✅ Node.js API 服务器已启动（端口 3001）");
-    
-    let app_state = Arc::new(Mutex::new(commands::AppState {
-        node_server_url: "http://127.0.0.1:3001".to_string(),
-        node_process: node_process.clone(),
-    }));
-    
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(app_state)
-        .invoke_handler(tauri::generate_handler![
-            commands::search_comics,
-            commands::get_cache_list,
-            commands::get_cached_comics,
-            commands::delete_cache,
-            commands::compare_comics,
-            commands::download_comics,
-            commands::cancel_download,
-            commands::get_config,
-            commands::set_config,
-            commands::select_directory
-        ])
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
-            println!("🎨 WNACG Downloader 前端已加载");
-            
-            if let Some(_window) = app.get_webview_window("main") {
-                println!("✅ 主窗口已创建");
+            // 加载配置
+            match config::load_config() {
+                Ok(config) => {
+                    println!("✅ 配置已加载：{}", config.storage_path);
+                }
+                Err(e) => {
+                    eprintln!("⚠️ 配置加载失败：{}", e);
+                }
             }
-            
+
+            // 创建系统托盘菜单
+            let show_item = MenuItem::with_id(app, "show", "显示窗口", true, None::<&str>)?;
+            let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+            // 创建系统托盘
+            let _tray = TrayIconBuilder::new()
+                .icon(app.default_window_icon().unwrap().clone())
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => {
+                        std::process::exit(0);
+                    }
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
+                        if let Some(window) = tray.app_handle().get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(app)?;
+
+            println!("🎨 WNACG Downloader v4.0 已启动");
+
             Ok(())
         })
-        .on_window_event(|_window, event| {
-            // 窗口关闭时清理 Node.js 进程
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
-                println!("🛑 应用正在关闭...");
+        .invoke_handler(tauri::generate_handler![
+            // 配置命令
+            commands::config::get_config,
+            commands::config::save_config,
+            commands::config::reset_config,
+            // 搜索命令（Phase 2 实现）
+            commands::search::search_comics,
+            // Cloudflare 验证
+            commands::cloudflare::mark_cloudflare_verified,
+            // 对比命令（Phase 3 实现）
+            commands::compare::compare_comics,
+            // 下载命令（Phase 3 实现）
+            commands::download::start_download,
+            // 窗口控制
+            window_minimize,
+            window_maximize,
+            window_close,
+        ])
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                // 阻止关闭，改为隐藏到托盘
+                api.prevent_close();
+                let _ = window.hide();
+                println!("🛑 窗口已隐藏到托盘");
             }
         })
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("运行 Tauri 应用失败");
 }
