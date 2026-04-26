@@ -95,8 +95,6 @@ fn main() {
             commands::config::reset_config,
             // 搜索命令（Phase 2 实现）
             commands::search::search_comics,
-            // Cloudflare 验证
-            commands::cloudflare::mark_cloudflare_verified,
             // 对比命令（Phase 3 实现）
             commands::compare::compare_comics,
             // 下载命令（Phase 3 实现）

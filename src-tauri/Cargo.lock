@@ -3466,6 +3466,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "reqwest_cookie_store"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba529055ea150e42e4eb9c11dcd380a41025ad4d594b0cb4904ef28b037e1061"
+dependencies = [
+ "bytes",
+ "cookie_store",
+ "reqwest 0.11.27",
+ "url",
+]
+
+[[package]]
 name = "rfd"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6104,8 +6116,11 @@ version = "4.0.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "cookie_store",
  "dirs 5.0.1",
+ "open",
  "reqwest 0.11.27",
+ "reqwest_cookie_store",
  "scraper",
  "serde",
  "serde_json",

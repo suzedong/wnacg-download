@@ -3,26 +3,7 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-
-export interface Comic {
-  aid: string;
-  title: string;
-  author: string;
-  category: string;
-  cover_url: string;
-  url: string;
-  pages: number;
-  tags: string[];
-  upload_date: string;
-}
-
-export interface SearchOptions {
-  max_pages: number;
-  request_interval: number;
-  search_chinese_only: boolean;
-  proxy: string | null;
-  proxy_enabled: boolean;
-}
+import type { Comic, SearchOptions } from '../types';
 
 export function useSearch() {
   const results = ref<Comic[]>([]);

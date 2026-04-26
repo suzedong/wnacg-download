@@ -2,22 +2,7 @@
 
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
-
-export interface AppConfig {
-  storage_path: string;
-  proxy: string | null;
-  proxy_enabled: boolean;
-  max_pages: number;
-  request_interval: number;
-  search_chinese_only: boolean;
-  concurrent_downloads: number;
-  retry_times: number;
-  retry_interval: number;
-  ai_api_url: string;
-  ai_api_key: string | null;
-  match_threshold: number;
-  theme: string;
-}
+import type { AppConfig } from '../types';
 
 export function useConfig() {
   const config = ref<AppConfig | null>(null);

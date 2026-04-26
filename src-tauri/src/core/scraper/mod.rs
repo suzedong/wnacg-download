@@ -6,28 +6,49 @@ use crate::types::comic::Comic;
 use crate::types::search::{SearchOptions, SearchResult};
 use chrono::Local;
 use reqwest::Client;
+use reqwest_cookie_store::{CookieStoreMutex, CookieStore};
 use scraper::{Html, Selector};
 use std::fs;
-use std::path::Path;
+use std::sync::Arc;
 use std::time::Duration;
 
+/// 判断分类是否为汉化内容
+#[allow(dead_code)]
+fn is_chinese_category(category: &str) -> bool {
+    // 根据 WNACG 网站的分类标识，汉化内容通常包含特定关键词
+    // 这里使用宽松的判断，包含"汉化"、"中文"等关键词
+    category.contains("汉化") || 
+    category.contains("中文") || 
+    category.contains("汉") ||
+    category.is_empty() // 空分类默认为汉化
+}
+
 /// 爬虫结构体
+#[allow(dead_code)]
 pub struct Scraper {
     client: Client,
     options: SearchOptions,
 }
 
+#[allow(dead_code)]
 impl Scraper {
     /// 创建新的爬虫实例
     pub fn new(options: SearchOptions) -> Result<Self, AppError> {
+        let cookie_store = CookieStore::default();
+        let cookie_store = CookieStoreMutex::new(cookie_store);
+        let cookie_store = Arc::new(cookie_store);
+
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(30))
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .cookie_provider(cookie_store);
 
         // 配置代理
-        if let Some(proxy_url) = &options.proxy {
-            let proxy = reqwest::Proxy::all(proxy_url)?;
-            client_builder = client_builder.proxy(proxy);
+        if options.proxy_enabled {
+            if let Some(proxy_url) = &options.proxy {
+                let proxy = reqwest::Proxy::all(proxy_url)?;
+                client_builder = client_builder.proxy(proxy);
+            }
         }
 
         let client = client_builder.build()?;
@@ -41,7 +62,6 @@ impl Scraper {
 
         // 构建搜索 URL
         let base_url = "https://www.wnacg.com/search/index.php";
-        let _chinese_only = if self.options.chinese_only { "yes" } else { "no" };
 
         // 获取第一页
         let first_page_url = format!(
@@ -51,12 +71,10 @@ impl Scraper {
 
         let html = self.fetch_page(&first_page_url).await?;
 
-        // 检查是否是 Cloudflare 验证页面
-        if Self::is_cloudflare_challenge(&html) {
-            println!("🔒 检测到 Cloudflare 验证");
-            // TODO: 弹出 WebView 窗口，等待用户完成验证
-            // 这里先返回错误
-            return Err(AppError::CloudflareError("需要完成 Cloudflare 验证".to_string()));
+        // 调试：输出 HTML 长度和前 500 个字符
+        println!("📄 获取到 HTML，长度：{}", html.len());
+        if html.len() > 500 {
+            println!("📄 HTML 前 500 字符：{}", &html[..500]);
         }
 
         // 解析第一页，获取总页数
@@ -86,54 +104,75 @@ impl Scraper {
             },
         );
 
-        // 并发爬取剩余页面
+        // 并发爬取剩余页面（分批控制，每批 3 个页面）
         if max_pages > 1 {
-            let mut handles = vec![];
+            let batch_size = 3; // 每批并发数
+            let pages: Vec<u32> = (2..=max_pages).collect();
 
-            for page in 2..=max_pages {
-                let client = self.client.clone();
-                let url = format!(
-                    "{}?q={}&m=&syn=yes&f=_all&s=create_time_DESC&p={}",
-                    base_url, keyword, page
-                );
+            for chunk in pages.chunks(batch_size) {
+                let mut handles = vec![];
 
-                let handle = tokio::spawn(async move {
-                    match Self::fetch_page_with_client(&client, &url).await {
-                        Ok(html) => Self::parse_comics(&html).unwrap_or_default(),
-                        Err(_) => vec![],
-                    }
-                });
-
-                handles.push((page, handle));
-            }
-
-            // 等待所有任务完成
-            for (page, handle) in handles {
-                if let Ok(comics) = handle.await {
-                    // 请求间隔
-                    tokio::time::sleep(Duration::from_millis(self.options.request_interval)).await;
-
-                    let count = comics.len();
-                    all_comics.extend(comics);
-
-                    println!("📄 第 {} 页找到 {} 部漫画", page, count);
-
-                    // 发送进度事件
-                    events::emit_search_progress(
-                        app,
-                        SearchProgressEvent {
-                            current: page,
-                            total: max_pages,
-                            found_count: all_comics.len() as u32,
-                        },
+                // 发起一批请求
+                for &page in chunk {
+                    let client = self.client.clone();
+                    let url = format!(
+                        "{}?q={}&m=&syn=yes&f=_all&s=create_time_DESC&p={}",
+                        base_url, keyword, page
                     );
+
+                    let handle = tokio::spawn(async move {
+                        match Self::fetch_page_with_client(&client, &url).await {
+                            Ok(html) => {
+                                let comics = Self::parse_comics(&html).unwrap_or_default();
+                                // 注意：过滤逻辑在搜索完成后统一处理
+                                comics
+                            },
+                            Err(e) => {
+                                eprintln!("⚠️ 第 {} 页爬取失败：{}", page, e);
+                                vec![]
+                            }
+                        }
+                    });
+
+                    handles.push((page, handle));
                 }
+
+                // 等待这批任务完成
+                for (page, handle) in handles {
+                    if let Ok(comics) = handle.await {
+                        let count = comics.len();
+                        all_comics.extend(comics);
+
+                        println!("📄 第 {} 页找到 {} 部漫画", page, count);
+
+                        // 发送进度事件
+                        events::emit_search_progress(
+                            app,
+                            SearchProgressEvent {
+                                current: page,
+                                total: max_pages,
+                                found_count: all_comics.len() as u32,
+                            },
+                        );
+                    }
+                }
+
+                // 批次间请求间隔
+                tokio::time::sleep(Duration::from_millis(self.options.request_interval)).await;
             }
         }
 
         // 去重
         all_comics = Self::deduplicate_comics(all_comics);
         println!("📊 去重后共 {} 部漫画", all_comics.len());
+
+        // 根据配置过滤非汉化内容
+        if self.options.search_chinese_only {
+            all_comics = all_comics.into_iter()
+                .filter(|c| is_chinese_category(&c.category))
+                .collect();
+            println!("🇨🇳 过滤后剩余 {} 部汉化漫画", all_comics.len());
+        }
 
         // 保存到文件
         let file_path = Self::save_results(&keyword, &all_comics)?;
@@ -164,6 +203,8 @@ impl Scraper {
     }
 
     /// 检查是否是 Cloudflare 验证页面
+    /// 检查是否为 Cloudflare 验证页面
+    #[allow(dead_code)]
     fn is_cloudflare_challenge(html: &str) -> bool {
         html.contains("challenge-platform") || html.contains("cf-challenge") || html.contains("Checking your browser")
     }
@@ -172,24 +213,27 @@ impl Scraper {
     fn parse_total_pages(html: &str) -> Result<u32, AppError> {
         let document = Html::parse_document(html);
 
-        // 查找分页元素
-        let pager_selector = Selector::parse("div.paginator a").unwrap();
+        // 查找分页元素 - 使用更宽松的选择器
+        let pager_selector = Selector::parse("div.paginator a, .paginator a").unwrap();
 
         let mut max_page = 1;
 
         for element in document.select(&pager_selector) {
             if let Some(href) = element.value().attr("href") {
-                // 从 URL 中提取页数
-                if let Some(p_param) = href.split('&').find(|s| s.starts_with("p=")) {
-                    if let Ok(page) = p_param[2..].parse::<u32>() {
-                        if page > max_page {
-                            max_page = page;
+                // 从 URL 中提取页数，格式如：p=2
+                if let Some(p_match) = href.split('?').last() {
+                    if let Some(p_param) = p_match.split('&').find(|s| s.starts_with("p=")) {
+                        if let Ok(page) = p_param[2..].parse::<u32>() {
+                            if page > max_page {
+                                max_page = page;
+                            }
                         }
                     }
                 }
             }
         }
 
+        println!("📄 解析到的最大页数：{}", max_page);
         Ok(max_page)
     }
 
@@ -299,10 +343,21 @@ impl Scraper {
 
     /// 保存搜索结果到文件
     fn save_results(keyword: &str, comics: &[Comic]) -> Result<String, AppError> {
-        // 创建 cache 目录
-        let cache_dir = Path::new("cache");
+        // 使用项目目录下的 cache 目录
+        let cache_dir = std::env::current_dir()
+            .map_err(|e| AppError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("无法获取当前目录：{}", e),
+            )))?
+            .parent()
+            .ok_or(AppError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "无法获取项目目录",
+            )))?
+            .join("cache");
+
         if !cache_dir.exists() {
-            fs::create_dir_all(cache_dir)?;
+            fs::create_dir_all(&cache_dir)?;
         }
 
         // 构建文件名

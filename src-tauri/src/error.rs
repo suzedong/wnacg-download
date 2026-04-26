@@ -27,9 +27,6 @@ pub enum AppError {
     #[error("下载错误：{0}")]
     DownloadError(String),
 
-    #[error("Cloudflare 验证：{0}")]
-    CloudflareError(String),
-
     #[error("未知错误：{0}")]
     Unknown(String),
 }

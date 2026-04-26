@@ -7,7 +7,7 @@
 - **前端架构**：Vue 3 + TypeScript
 - **后端架构**：Rust + Tokio
 - **通信机制**：Tauri Commands + Events
-- **桌面集成**：无边框窗口、系统托盘、暗色模式
+- **桌面集成**：系统窗口、系统托盘、暗色模式
 
 ---
 
@@ -50,22 +50,28 @@
 │   ├── components/               # UI 组件
 │   ├── views/                    # 页面组件
 │   ├── composables/              # 组合式函数
-│   ├── styles/                   # 样式
+│   ├── types/                    # 类型定义
+│   ├── App.vue                   # 主组件
 │   └── main.ts                   # 入口
+│
+├── dist/                         # 构建产物
+│
+├── scripts/                      # 脚本目录
+│   └── search_with_playwright.js # Playwright 搜索脚本
 │
 ├── src-tauri/                    # Tauri 应用（主目录）
 │   ├── src/
 │   │   ├── main.rs               # 入口
 │   │   ├── commands/             # Tauri Commands
 │   │   │   ├── mod.rs
-│   │   │   ├── search.rs         # 搜索命令
+│   │   │   ├── search.rs         # 搜索命令（Playwright）
 │   │   │   ├── compare.rs        # 对比命令
 │   │   │   ├── download.rs       # 下载命令
 │   │   │   ├── config.rs         # 配置命令
 │   │   │   └── cloudflare.rs     # Cloudflare 验证处理
 │   │   ├── core/                 # 核心业务逻辑
 │   │   │   ├── mod.rs
-│   │   │   ├── scraper/          # 爬虫
+│   │   │   ├── scraper/          # 爬虫（旧方案，保留代码）
 │   │   │   ├── downloader/       # 下载
 │   │   │   ├── comparer/         # 对比
 │   │   │   ├── scanner/          # 扫描
@@ -79,7 +85,6 @@
 │   └── ...
 │
 ├── docs/                         # 文档
-├── cache/                        # 缓存目录
 └── ...
 ```
 
@@ -167,50 +172,44 @@ export function useSearch() {
 - **语言**：Rust
 - **异步运行时**：Tokio
 - **HTTP 客户端**：reqwest
+- **浏览器自动化**：Playwright（通过 Node.js 脚本）
 - **HTML 解析**：scraper
 - **JSON 处理**：serde + serde_json
 - **错误处理**：thiserror
-- **目录操作**：dirs
+- **目录操作**：程序目录下（config/, cache/）
 
 ### 3.2 核心模块
 
-#### 3.2.1 爬虫模块（scraper）
+#### 3.2.1 搜索模块（search）
+
+**使用 Playwright 浏览器自动化进行搜索**
 
 ```rust
-// core/scraper/mod.rs
-pub struct Scraper {
-    client: reqwest::Client,
-    config: ScraperConfig,
-}
-
-impl Scraper {
-    pub async fn search(&self, keyword: &str) -> Result<Vec<Comic>> {
-        // 1. 构建搜索 URL
-        // 2. 获取第一页，提取总页数
-        // 3. 并发爬取所有页面
-        // 4. 解析漫画信息
-        // 5. 去重并返回
-    }
-
-    async fn fetch_page(&self, url: &str) -> Result<String> {
-        // HTTP 请求，支持代理
-    }
-
-    fn parse_comics(&self, html: &str) -> Vec<Comic> {
-        // 使用 scraper 库解析 HTML
-    }
+// commands/search.rs
+pub async fn search_comics(
+    app: tauri::AppHandle,
+    keyword: String,
+    options: SearchOptions,
+) -> Result<SearchResult, String> {
+    // 1. 调用 Playwright 脚本打开第一页
+    // 2. 获取总页数
+    // 3. 并行调用 Playwright 脚本爬取所有剩余页面
+    // 4. 去重、过滤、保存
 }
 ```
 
+**Playwright 脚本**（`scripts/search_with_playwright.js`）：
+- 使用 Playwright 打开 Chromium 浏览器
+- 提取漫画信息（`div.pic_box` 选择器）
+- 返回 JSON 格式结果
+
 **关键特性**：
-- 并发爬取（多页并行）
+- 真实浏览器，无 Cloudflare 问题
+- 并行爬取（多页同时进行）
 - 请求间隔控制
-- 代理支持
-- **混合爬取策略**：
-  - 正常情况：使用 `reqwest` 发送 HTTP 请求
-  - 遇到 Cloudflare 验证：弹出内部 WebView 窗口
-  - 用户完成验证后继续爬取
-  - Cookies 自动共享，无需重复验证
+- 代理支持（通过 Playwright 配置）
+- 标题处理（去除 `<em>` 标签）
+- 分类提取（`cate-*` 类名）
 
 #### 3.2.2 下载器模块（downloader）
 
@@ -304,31 +303,38 @@ impl Scanner {
 
 ### 3.3 配置管理
 
+**配置文件路径**：程序目录下的 `config/config.json`
+
 ```rust
 // config.rs
-pub struct Config {
+pub struct AppConfig {
     pub storage_path: String,
     pub proxy: Option<String>,
+    pub proxy_enabled: bool,
     pub max_pages: u32,
     pub request_interval: u64,
+    pub search_chinese_only: bool,
     pub concurrent_downloads: u32,
     pub retry_times: u32,
-    pub retry_interval: u64,
+    pub retry_interval: u64, // 单位：秒
     pub ai_api_url: String,
     pub ai_api_key: Option<String>,
     pub match_threshold: f64,
+    pub theme: String, // "light" 或 "dark"
 }
 
 impl Config {
     pub fn load() -> Result<Self> {
-        // 从 JSON 文件读取
+        // 从程序目录下的 config/config.json 读取
     }
 
     pub fn save(&self) -> Result<()> {
-        // 保存到 JSON 文件
+        // 保存到程序目录下的 config/config.json
     }
 }
 ```
+
+**缓存文件路径**：程序目录下的 `cache/` 目录
 
 ### 3.4 事件系统
 
@@ -424,34 +430,34 @@ await listen('download_complete', (event) => {
 
 ## 5. 桌面集成
 
-### 5.1 无边框窗口
+### 5.1 系统窗口
 
-```json
-// tauri.conf.json
-{
-  "tauri": {
-    "window": {
-      "decorations": false,
-      "width": 1200,
-      "height": 800,
-      "minWidth": 900,
-      "minHeight": 600,
-      "title": "WNACG Downloader"
-    }
-  }
-}
-```
+使用系统原生标题栏和窗口控制按钮，无需额外配置。
 
 ### 5.2 系统托盘
 
-```json
-{
-  "app": {
-    "trayIcon": {
-      "iconPath": "icons/icon.png",
-      "iconAsTemplate": true
-    }
-  }
+Tauri 2 中托盘通过代码手动创建（不使用配置文件）：
+
+```rust
+// main.rs
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::TrayIconBuilder;
+
+fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let quit_item = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&quit_item])?;
+    
+    TrayIconBuilder::new()
+        .icon(app.default_window_icon().unwrap().clone())
+        .menu(&menu)
+        .on_menu_event(|app, event| {
+            if event.id() == "quit" {
+                std::process::exit(0);
+            }
+        })
+        .build(app)?;
+    
+    Ok(())
 }
 ```
 
@@ -502,15 +508,17 @@ fn send_notification(app: &AppHandle, title: &str, body: &str) {
   ↓
 调用 search_comics Command
   ↓
-后端创建 Scraper
+后端调用 Playwright 脚本打开第一页
   ↓
-并发爬取多页
+获取总页数，解析第一页漫画
+  ↓
+并行调用 Playwright 脚本爬取所有剩余页面
   ↓
 发送 search_progress Event
   ↓
-解析并去重
+解析、去重、过滤
   ↓
-保存到 cache/
+保存到程序目录 cache/
   ↓
 返回结果到前端
   ↓
@@ -617,9 +625,10 @@ try {
 - 防抖/节流
 
 ### 8.3 缓存策略
-- 搜索结果缓存（JSON 文件）
+- 搜索结果保存（程序目录 cache/ JSON 文件，每次搜索重新爬取）
 - AI 匹配结果缓存
-- 配置缓存
+- 配置缓存（程序目录 config/ JSON 文件）
+- Playwright 浏览器自动化（避免 Cloudflare 问题）
 
 ---
 

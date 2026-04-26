@@ -113,13 +113,14 @@ npm run build:frontend
 
 ```
 wnacg-download/
-├── web/                    # 前端（Vue 3）
-│   ├── src/
-│   │   ├── components/     # UI 组件
-│   │   ├── views/          # 页面组件
-│   │   ├── App.vue
-│   │   └── main.ts
-│   └── dist/               # 构建产物
+├── src/                    # 前端（Vue 3）
+│   ├── components/         # UI 组件
+│   ├── views/              # 页面组件
+│   ├── composables/        # 组合式函数
+│   ├── types/              # 类型定义
+│   ├── App.vue
+│   └── main.ts
+├── dist/                   # 构建产物
 ├── src-tauri/              # 后端（Rust）
 │   ├── src/
 │   │   ├── commands/       # Tauri Commands

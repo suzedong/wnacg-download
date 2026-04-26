@@ -3,15 +3,7 @@
 import { ref } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-
-export interface DownloadTask {
-  aid: string;
-  title: string;
-  url: string;
-  cover_url: string;
-  save_path: string;
-  pages: number;
-}
+import type { DownloadTask } from '../types';
 
 export function useDownload() {
   const isDownloading = ref(false);

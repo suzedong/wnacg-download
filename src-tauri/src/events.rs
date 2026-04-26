@@ -5,6 +5,7 @@ use tauri::Emitter;
 
 /// 搜索进度事件
 #[derive(Clone, Serialize)]
+#[allow(dead_code)]
 pub struct SearchProgressEvent {
     /// 当前页码
     pub current: u32,
@@ -54,6 +55,7 @@ pub struct ErrorEvent {
 }
 
 /// 发送搜索进度事件
+#[allow(dead_code)]
 pub fn emit_search_progress(app: &tauri::AppHandle, event: SearchProgressEvent) {
     let _ = app.emit("search_progress", event);
 }

@@ -5,12 +5,15 @@ use crate::types::config::AppConfig;
 use std::fs;
 use std::path::PathBuf;
 
-/// 获取配置文件路径
+/// 获取配置文件路径（使用程序目录）
 fn get_config_path() -> Result<PathBuf, AppError> {
-    let config_dir = dirs::config_dir()
-        .ok_or_else(|| AppError::ConfigError("无法获取配置目录".to_string()))?;
+    // 使用程序目录
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
     
-    let config_dir = config_dir.join("wnacg-downloader");
+    let config_dir = exe_dir.join("config");
     
     // 创建配置目录（如果不存在）
     if !config_dir.exists() {

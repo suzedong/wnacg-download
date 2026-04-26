@@ -53,9 +53,11 @@ pub mod search {
         /// 请求间隔（毫秒）
         pub request_interval: u64,
         /// 只搜索汉化版
-        pub chinese_only: bool,
+        pub search_chinese_only: bool,
         /// 代理地址
         pub proxy: Option<String>,
+        /// 是否启用代理
+        pub proxy_enabled: bool,
     }
 
     /// 搜索结果
