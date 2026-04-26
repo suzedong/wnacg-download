@@ -4,6 +4,7 @@
 
 mod commands;
 mod config;
+mod core;
 mod error;
 mod events;
 mod notification;

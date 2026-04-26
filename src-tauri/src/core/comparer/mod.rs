@@ -6,7 +6,6 @@ use crate::error::AppError;
 use crate::events::{self, CompareProgressEvent};
 use crate::types::compare::CompareResult;
 use crate::types::comic::Comic;
-use tauri::Emitter;
 
 /// 对比器
 pub struct Comparer {

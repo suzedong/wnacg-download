@@ -2,457 +2,269 @@
 
 ## 项目状态
 
-**当前版本**: v3.x（三架构版本）  
-**目标版本**: v4.0（纯桌面端重构版）  
-**重构类型**：架构重构（CLI + Web → 纯 Tauri 桌面）
+**当前版本**: v4.0（纯桌面端）  
+**技术栈**: Rust + Tauri 2 + Vue 3 + TypeScript  
+**当前状态**: 基础架构已完成，核心后端已实现，前端页面待完善
 
 ---
 
-## 重构概述
+## 现状概览
 
-### 背景
-当前项目采用 CLI + Web + Tauri 三架构设计，存在以下问题：
-1. 架构复杂，维护成本高
-2. 适配器模式增加代码量
-3. Express 服务器冗余（Tauri 自带 IPC）
-4. CLI 和 Web 用户群体小
+### 已完成
+- ✅ Rust 后端核心模块（爬虫、下载器、扫描器、对比器、AI 匹配）
+- ✅ Tauri Commands 和 Events 通信机制
+- ✅ 配置管理系统
+- ✅ 系统托盘和无边框窗口
+- ✅ Vue 3 前端框架和路由导航
+- ✅ 主题系统（亮色/暗色）
+- ✅ 搜索页面（基础展示）
+- ✅ 配置页面
+- ✅ 自定义标题栏和侧边栏
 
-### 目标
-重构为纯 Tauri 2 桌面应用：
-- ✅ 后端用 Rust 重写核心逻辑
-- ✅ 前端保持 Vue 3
-- ✅ 移除 CLI 和 Web 相关代码
-- ✅ 添加桌面专属功能（无边框窗口、托盘、暗色模式）
-
-### 技术决策
-| 方面 | 决策 |
-|------|------|
-| 核心逻辑 | Rust 重写 |
-| 功能范围 | 全部保留（搜索、对比、下载、配置） |
-| 前端框架 | Vue 3 + Vite |
-| UI 组件 | 继续自研 |
-| 窗口风格 | 无边框窗口 + 自定义标题栏 |
-| 系统托盘 | 需要（后台下载） |
-| 暗色模式 | 需要（跟随系统/手动切换） |
-| 导航方式 | 左侧边栏 |
-| AI 方案 | 远程 API 优先，后续实现本地模型 |
-| 目录结构 | `src-tauri/` 为主，`src/` 为前端 |
-| 进度推送 | Tauri Events |
-| 数据存储 | JSON 文件 |
+### 待完成
+- ❌ 编译阻断问题（类型不匹配）
+- ❌ 对比页面（CompareView.vue）
+- ❌ 下载页面（DownloadView.vue）
+- ❌ 搜索页面完善（选择、添加到队列）
+- ❌ 前端类型统一管理
+- ❌ 暗色模式跟随系统
+- ❌ 测试覆盖
 
 ---
 
-## Phase 0：准备阶段
+## Phase 1：修复编译问题（紧急）
 
-**目标**：更新项目文档，清理无用代码
+**目标**：修复前后端类型不匹配，确保项目可编译运行
 
 ### 任务清单
 
-- [ ] **0.1 更新文档**
-  - [ ] 更新 `.trae/rules/bss-rules.md`
-  - [ ] 更新 `.trae/rules/dev-rules.md`
-  - [ ] 更新 `docs/ARCHITECTURE.md`
-  - [ ] 更新 `docs/REQUIREMENTS.md`
-  - [ ] 更新 `docs/UI-DESIGN.md`
-  - [ ] 更新 `docs/DEVELOPMENT_PLAN.md`（本文档）
+- [ ] **1.1 修复 DownloaderConfig 缺少 Clone trait**
+  - 文件：`src-tauri/src/core/downloader/mod.rs`
+  - 修改：为 `DownloaderConfig` 结构体添加 `#[derive(Clone)]`
 
-- [ ] **0.2 删除无用目录**
-  - [ ] 删除 `src/cli/`
-  - [ ] 删除 `src/web/`
-  - [ ] 删除 `src/ui/adapters/`
+- [ ] **1.2 修复 SearchOptions 前后端类型不匹配**
+  - 文件：`src-tauri/src/types.rs`
+  - 问题：前端 `useSearch.ts` 传递 `proxy_enabled` 字段，但后端没有
+  - 方案：在后端 `SearchOptions` 中添加 `proxy_enabled: Option<bool>` 字段
 
-- [ ] **0.3 删除无用文件**
-  - [ ] 删除 `src/api-server.ts`
-  - [ ] 删除 `src/tui.ts`
-  - [ ] 删除 `src/index.ts`（旧入口）
-  - [ ] 删除 `src/setup.ts`
-  - [ ] 删除 `scripts/api-server.js`
-  - [ ] 删除 `test-api.js`
-  - [ ] 删除 `test-compare.js`
-  - [ ] 删除 `start-tauri.bat`
-  - [ ] 删除 `start-tauri.ps1`
+- [ ] **1.3 创建前端统一类型文件**
+  - 文件：`src/types/index.ts`
+  - 内容：统一定义所有前端类型，与后端 `types.rs` 保持一致
+  - 包括：Comic, SearchResult, DownloadTask, CompareResult, AppConfig 等
 
-- [ ] **0.4 更新配置文件**
-  - [ ] 更新 `package.json`（移除无用依赖和脚本）
-  - [ ] 更新 `tsconfig.json`（简化配置）
-  - [ ] 更新 `vite.config.ts`（Tauri 配置）
-  - [ ] 更新 `.eslintrc.json`
-  - [ ] 更新 `.prettierrc.json`
-
-- [ ] **0.5 移动前端代码**
-  - [ ] 创建 `web/` 目录
-  - [ ] 移动 `src/ui/` → `web/src/`
-  - [ ] 移动 `public/` → `web/public/`
-  - [ ] 移动 `index.html` → `web/index.html`
+- [ ] **1.4 修复 Cloudflare 验证逻辑**
+  - 文件：`src-tauri/src/commands/cloudflare.rs`
+  - 问题：`verified` 状态从未被设置为 `true`
+  - 方案：实现正确的验证等待和状态更新逻辑
 
 ### 验收标准
-
-- [ ] 所有文档已更新，描述纯 Tauri 架构
-- [ ] 无用代码已删除
-- [ ] 前端代码在 `src/` 目录
-- [ ] 项目可以正常编译（前端部分）
-- [ ] `package.json` 只保留必要依赖
+- [ ] `cargo check` 通过无错误
+- [ ] `npm run build` 通过无错误
+- [ ] 前后端类型完全匹配
+- [ ] Cloudflare 验证可正常工作
 
 ---
 
-## Phase 1：Rust 核心模块（基础）
+## Phase 2：实现核心前端页面
 
-**目标**：搭建 Rust 项目结构，实现基础模块
+**目标**：完成对比页面和下载页面，实现完整功能闭环
 
 ### 任务清单
 
-- [ ] **1.1 更新 Cargo.toml**
-  ```toml
-  [dependencies]
-  tauri = { version = "2", features = ["shell-open"] }
-  serde = { version = "1.0", features = ["derive"] }
-  serde_json = "1.0"
-  reqwest = { version = "0.11", features = ["json", "socks"] }
-  scraper = "0.17"
-  tokio = { version = "1", features = ["full"] }
-  thiserror = "1.0"
-  dirs = "5.0"
-  ```
+- [ ] **2.1 实现 CompareView.vue（对比页面）**
+  - UI 组件：
+    - 统计卡片（本地漫画数、搜索结果数、匹配数）
+    - 搜索结果选择器（下拉选择搜索缓存文件）
+    - 本地路径选择器（选择要扫描的文件夹）
+    - 对比结果列表（匹配结果、未匹配结果）
+  - 功能：
+    - 选择搜索缓存文件
+    - 选择本地文件夹
+    - 执行对比（调用 Tauri Command）
+    - 展示匹配进度
+    - 展示匹配结果（相似度、本地路径、网络标题）
+  - 参考：`UI-DESIGN.md` 对比页面设计
 
-- [ ] **1.2 创建目录结构**
-  ```
-  src-tauri/src/
-  ├── main.rs
-  ├── commands/
-  │   ├── mod.rs
-  │   ├── search.rs
-  │   ├── compare.rs
-  │   ├── download.rs
-  │   └── config.rs
-  ├── core/
-  │   ├── mod.rs
-  │   ├── scraper/
-  │   ├── downloader/
-  │   ├── comparer/
-  │   ├── scanner/
-  │   └── ai/
-  ├── config.rs
-  ├── events.rs
-  ├── types.rs
-  └── error.rs
-  ```
+- [ ] **2.2 实现 DownloadView.vue（下载页面）**
+  - UI 组件：
+    - 下载队列列表
+    - 进度条和速度显示
+    - 下载控制按钮（开始/暂停/取消/重试）
+    - 统计信息（总数、成功、失败、进度）
+  - 功能：
+    - 接收下载队列（从搜索页面添加）
+    - 开始下载（调用 Tauri Command）
+    - 监听下载进度事件
+    - 暂停/恢复下载
+    - 取消下载任务
+    - 重试失败任务
+    - 下载完成通知
+  - 参考：`UI-DESIGN.md` 下载页面设计
 
-- [ ] **1.3 实现 types.rs**
-  - `Comic` - 漫画信息
-  - `SearchOptions` - 搜索选项
-  - `DownloadTask` - 下载任务
-  - `CompareResult` - 对比结果
-  - `Config` - 配置结构
+- [ ] **2.3 完善 SearchView.vue（搜索页面）**
+  - 添加漫画卡片复选框（单选/全选）
+  - 添加"添加到下载队列"按钮
+  - 实现与 DownloadView 的队列联动
+  - 添加清空搜索结果功能
 
-- [ ] **1.4 实现 error.rs**
-  - `AppError` - 自定义错误类型
-  - 错误转换
-
-- [ ] **1.5 实现 config.rs**
-  - 读取/写入配置
-  - 默认配置
-  - 配置验证
-
-- [ ] **1.6 实现 events.rs**
-  - 定义事件类型
-  - 事件发射函数
-
-- [ ] **1.7 更新 main.rs**
-  - 注册 Commands
-  - 初始化配置
+- [ ] **2.4 实现 Composable 之间的状态共享**
+  - 创建 `useDownloadQueue.ts` 管理全局下载队列
+  - 实现搜索页面到下载页面的数据传递
+  - 使用 Vue 的 `provide/inject` 或 Pinia（如需引入）
 
 ### 验收标准
-
-- [ ] Rust 项目可以编译
-- [ ] 配置可以正确读写
-- [ ] 类型定义完整
-- [ ] 错误处理完善
+- [ ] 对比页面可正常执行对比并展示结果
+- [ ] 下载页面可接收队列并显示进度
+- [ ] 搜索页面可选择漫画并添加到下载队列
+- [ ] 三个页面之间数据流转正常
 
 ---
 
-## Phase 2：Rust 核心模块（爬虫 + 扫描器）
+## Phase 3：完善用户体验
 
-**目标**：实现爬虫模块和本地扫描器
+**目标**：优化界面细节、添加快捷操作、提升交互体验
 
 ### 任务清单
 
-- [ ] **2.1 实现 core/scraper/mod.rs**
-  - 搜索漫画
-  - 解析搜索结果
-  - 并发爬取
-  - 请求间隔控制
-  - 代理支持
-  - 去重逻辑
-  - **Cloudflare 处理**：
-    - 检测验证页面
-    - 弹出 WebView 窗口
-    - 等待用户完成验证
-    - Cookies 共享
+- [ ] **3.1 暗色模式跟随系统**
+  - 检测 `prefers-color-scheme` 媒体查询
+  - 添加"跟随系统"选项到配置页面
+  - 监听系统主题变化事件
+  - 实现主题自动切换
 
-- [ ] **2.2 实现 core/scanner/mod.rs**
-  - 扫描本地文件夹
-  - 提取漫画信息
-  - 支持多种文件夹结构
+- [ ] **3.2 快捷键支持**
+  - `Ctrl+1/2/3/4` 切换页面
+  - `Ctrl+D` 切换暗色模式
+  - `Ctrl+S` 聚焦搜索框
+  - `Escape` 取消当前操作
+  - 使用 Tauri 的 globalShortcut 或前端事件监听
 
-- [ ] **2.3 实现 commands/search.rs**
-  - `search_comics` Command
-  - 进度事件推送
+- [ ] **3.3 图片懒加载和虚拟滚动**
+  - 搜索结果图片使用懒加载
+  - 长列表使用虚拟滚动（如 `vue-virtual-scroller`）
+  - 优化首屏加载速度
 
-- [ ] **2.4 测试爬虫功能**
-  - 测试搜索功能
-  - 测试代理
-  - 测试并发爬取
+- [ ] **3.4 错误提示优化**
+  - 统一错误提示组件（Toast/Notification）
+  - 网络错误提供重试按钮
+  - 下载失败显示具体原因
+  - 配置错误提供修复建议
+
+- [ ] **3.5 加载状态优化**
+  - 添加骨架屏（Skeleton）
+  - 加载动画统一风格
+  - 超时处理和取消按钮
 
 ### 验收标准
-
-- [ ] 可以搜索漫画并返回结果
-- [ ] 支持代理和请求间隔
-- [ ] 可以扫描本地文件夹
-- [ ] 前端可以接收搜索进度
+- [ ] 暗色模式可跟随系统自动切换
+- [ ] 快捷键正常工作
+- [ ] 长列表滚动流畅无卡顿
+- [ ] 错误提示友好且可操作
+- [ ] 加载状态清晰明确
 
 ---
 
-## Phase 3：Rust 核心模块（下载 + 对比 + AI）
+## Phase 4：测试与优化
 
-**目标**：实现下载器、对比器和 AI 匹配
+**目标**：编写测试、性能优化、修复边界情况
 
 ### 任务清单
 
-- [ ] **3.1 实现 core/downloader/mod.rs**
-  - 并发下载
-  - 断点续传
-  - 重试机制
-  - 进度追踪
-  - 文件完整性校验
+- [ ] **4.1 Rust 核心模块单元测试**
+  - `scraper` 模块：HTML 解析、去重逻辑
+  - `downloader` 模块：并发下载、断点续传、重试逻辑
+  - `comparer` 模块：相似度计算、匹配算法
+  - `ai` 模块：Prompt 构建、响应解析
+  - `scanner` 模块：目录扫描、文件识别
 
-- [ ] **3.2 实现 core/ai/mod.rs**
-  - 远程 API 调用
-  - 相似度计算
-  - 缓存机制
-  - 预留本地模型接口
+- [ ] **4.2 前端组件测试**
+  - Composables 测试（useSearch, useDownload, useCompare, useConfig）
+  - 组件渲染测试
+  - 用户交互测试
 
-- [ ] **3.3 实现 core/comparer/mod.rs**
-  - 网站漫画与本地漫画对比
-  - AI 匹配集成
-  - 统计信息生成
+- [ ] **4.3 端到端测试**
+  - 完整搜索流程
+  - 完整下载流程
+  - 完整对比流程
+  - 配置保存和加载
 
-- [ ] **3.4 实现 commands/download.rs**
-  - `start_download` Command
-  - `pause_download` Command
-  - `cancel_download` Command
-  - 进度事件推送
+- [ ] **4.4 性能优化**
+  - Rust 端：连接池优化、内存使用优化
+  - 前端：组件懒加载、减少不必要的重渲染
+  - 图片：压缩和缓存策略
 
-- [ ] **3.5 实现 commands/compare.rs**
-  - `compare_comics` Command
-  - 进度事件推送
-
-- [ ] **3.6 测试下载和对比功能**
-  - 测试并发下载
-  - 测试断点续传
-  - 测试 AI 匹配
-  - 测试对比流程
+- [ ] **4.5 边界情况处理**
+  - 网络中断恢复
+  - 磁盘空间不足
+  - 非法输入处理
+  - 并发冲突处理
 
 ### 验收标准
-
-- [ ] 可以下载漫画（并发、断点续传）
-- [ ] AI 匹配可以正常工作
-- [ ] 对比功能完整
-- [ ] 所有进度通过 Events 推送
+- [ ] 核心模块测试覆盖率 > 70%
+- [ ] 所有测试用例通过
+- [ ] 性能指标达标（启动时间、内存占用、响应速度）
+- [ ] 边界情况有妥善处理
 
 ---
 
-## Phase 4：前端改造
+## Phase 5：打包与发布
 
-**目标**：适配 Tauri 2，优化 UI 组件
+**目标**：完善打包配置、应用图标、版本信息、发布准备
 
 ### 任务清单
 
-- [ ] **4.1 更新 package.json**
-  - 添加 `@tauri-apps/api` 2.x
-  - 移除 Web 相关依赖
+- [ ] **5.1 应用图标完善**
+  - 设计或选择合适的应用图标
+  - 生成所有尺寸图标（Windows、macOS）
+  - 更新 `src-tauri/icons/` 目录
 
-- [ ] **4.2 更新 vite.config.ts**
-  - 添加 Tauri 插件
-  - 配置构建路径
+- [ ] **5.2 打包配置**
+  - 配置 NSIS 安装包（Windows）
+  - 配置 DMG 打包（macOS）
+  - 添加版本信息和版权信息
+  - 配置自动更新（可选）
 
-- [ ] **4.3 创建 src/composables/**
-  - `useSearch.ts` - 搜索逻辑
-  - `useDownload.ts` - 下载逻辑
-  - `useCompare.ts` - 对比逻辑
-  - `useConfig.ts` - 配置逻辑
+- [ ] **5.3 文档完善**
+  - 更新 README.md 添加使用说明
+  - 添加用户手册
+  - 添加常见问题解答
+  - 添加贡献指南
 
-- [ ] **4.4 创建 src/components/Sidebar.vue**
-  - 侧边栏导航
-  - 激活状态
-  - 主题切换按钮
-
-- [ ] **4.5 更新 src/components/Header.vue**
-  - 自定义标题栏
-  - 拖拽支持
-  - 窗口控制按钮
-
-- [ ] **4.6 更新页面组件**
-  - `SearchView.vue`
-  - `CompareView.vue`
-  - `DownloadView.vue`
-  - `ConfigView.vue`
-
-- [ ] **4.7 更新 src/main.ts**
-  - Tauri 初始化
-  - 应用挂载
+- [ ] **5.4 发布准备**
+  - 创建发布版本标签
+  - 编写 Release Notes
+  - 准备安装包
+  - 测试安装包在不同系统的兼容性
 
 ### 验收标准
-
-- [ ] 前端可以正常编译
-- [ ] 所有功能可以正常工作
-- [ ] 侧边栏导航正常
-- [ ] 自定义标题栏正常
-- [ ] 进度实时更新
+- [ ] Windows 安装包可正常安装和运行
+- [ ] macOS DMG 可正常安装和运行
+- [ ] README 和文档完整
+- [ ] 版本号正确
 
 ---
 
-## Phase 5：桌面集成
+## 优先级总结
 
-**目标**：添加桌面端专属功能
-
-### 任务清单
-
-- [ ] **5.1 更新 tauri.conf.json**
-  - 无边框窗口配置
-  - 窗口尺寸
-  - 系统托盘配置
-
-- [ ] **5.2 实现系统托盘**
-  - 托盘图标
-  - 托盘菜单
-  - 最小化到托盘
-
-- [ ] **5.3 实现暗色模式**
-  - CSS 变量定义
-  - 跟随系统检测
-  - 手动切换
-  - 配置保存
-
-- [ ] **5.4 实现系统通知**
-  - Tauri 原生通知
-  - 下载完成通知
-  - 错误通知
-
-- [ ] **5.5 实现快捷键**
-  - 页面切换
-  - 主题切换
-
-- [ ] **5.6 实现窗口状态记忆**
-  - 保存窗口位置
-  - 保存窗口大小
-  - 恢复窗口状态
-
-### 验收标准
-
-- [ ] 无边框窗口正常
-- [ ] 系统托盘正常
-- [ ] 暗色模式正常
-- [ ] 系统通知正常
-- [ ] 窗口状态记忆正常
+| 优先级 | Phase | 说明 | 预计影响 |
+|--------|-------|------|----------|
+| **P0** | Phase 1 | 修复编译问题 | 项目可运行 |
+| **P1** | Phase 2 | 实现核心页面 | 功能可用 |
+| **P2** | Phase 3 | 完善体验 | 用户友好 |
+| **P3** | Phase 4 | 测试优化 | 稳定可靠 |
+| **P4** | Phase 5 | 打包发布 | 正式发布 |
 
 ---
 
-## Phase 6：测试、优化、打包
+## 开发建议
 
-**目标**：完善应用，准备发布
-
-### 任务清单
-
-- [ ] **6.1 功能测试**
-  - 搜索功能测试
-  - 对比功能测试
-  - 下载功能测试
-  - 配置功能测试
-
-- [ ] **6.2 性能优化**
-  - 图片懒加载
-  - 虚拟滚动
-  - 内存优化
-
-- [ ] **6.3 错误处理**
-  - 所有错误友好提示
-  - 日志记录
-  - 崩溃恢复
-
-- [ ] **6.4 打包配置**
-  - Windows 安装包
-  - macOS 安装包
-  - 应用图标
-  - 版本信息
-
-- [ ] **6.5 文档更新**
-  - 用户手册
-  - 安装指南
-  - 常见问题
-
-### 验收标准
-
-- [ ] 所有功能测试通过
-- [ ] 性能达标
-- [ ] 可以打包 Windows 和 macOS 安装包
-- [ ] 文档完整
-
----
-
-## 重构检查清单
-
-### 文档更新
-- [ ] `.trae/rules/bss-rules.md`
-- [ ] `.trae/rules/dev-rules.md`
-- [ ] `docs/ARCHITECTURE.md`
-- [ ] `docs/REQUIREMENTS.md`
-- [ ] `docs/UI-DESIGN.md`
-- [ ] `docs/DEVELOPMENT_PLAN.md`
-
-### 代码清理
-- [x] 删除 `src/cli/` - 已完成
-- [x] 删除 `src/web/` - 已完成
-- [x] 删除 `src/ui/adapters/` - 已完成
-- [x] 删除 `src/api-server.ts` - 已完成
-- [x] 删除 `src/tui.ts` - 已完成
-- [x] 删除 `src/index.ts` - 已完成
-- [x] 删除 `src/setup.ts` - 已完成
-- [x] 删除 `scripts/api-server.js` - 已完成
-- [x] 删除 `test-api.js` - 已完成
-- [x] 删除 `test-compare.js` - 已完成
-
-### 前端迁移
-- [x] 前端代码已在 `src/` 目录
-- [x] 更新 `package.json` - 已完成
-- [x] 更新 `vite.config.ts` - 已完成
-
-### Rust 开发
-- [ ] 实现 `types.rs`
-- [ ] 实现 `error.rs`
-- [ ] 实现 `config.rs`
-- [ ] 实现 `events.rs`
-- [ ] 实现 `core/scraper/`
-- [ ] 实现 `core/scanner/`
-- [ ] 实现 `core/downloader/`
-- [ ] 实现 `core/comparer/`
-- [ ] 实现 `core/ai/`
-- [ ] 实现 `commands/`
-
-### 前端改造
-- [ ] 实现 `composables/`
-- [ ] 实现 `Sidebar.vue`
-- [ ] 实现 `Header.vue`
-- [ ] 更新页面组件
-- [ ] 实现暗色模式
-- [ ] 实现系统托盘
-
-### 测试打包
-- [ ] 功能测试
-- [ ] 性能优化
-- [ ] Windows 打包
-- [ ] macOS 打包
+1. **严格按照 Phase 顺序执行**，不要跳过
+2. **每个任务完成后立即验证**，不要堆积
+3. **遇到问题先查文档**，不要盲目尝试
+4. **保持代码整洁**，及时提交
+5. **中文注释和日志**，保持一致性
 
 ---
 
 **最后更新**: 2026-04-26  
-**版本**: v4.0（纯桌面端重构版）
+**版本**: v4.0（纯桌面端）

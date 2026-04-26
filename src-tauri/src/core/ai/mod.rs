@@ -253,13 +253,13 @@ impl AiMatcher {
         }
 
         // 补充未匹配的漫画
-        let matched_titles: Vec<&str> = details
+        let matched_titles: Vec<String> = details
             .iter()
-            .map(|d| d.website.title.as_str())
+            .map(|d| d.website.title.clone())
             .collect();
 
         for comic in website_comics {
-            if !matched_titles.contains(&comic.title.as_str()) {
+            if !matched_titles.contains(&comic.title) {
                 details.push(MatchDetail {
                     website: comic.clone(),
                     local: None,

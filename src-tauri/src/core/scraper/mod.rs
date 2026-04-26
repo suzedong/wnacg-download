@@ -10,7 +10,6 @@ use scraper::{Html, Selector};
 use std::fs;
 use std::path::Path;
 use std::time::Duration;
-use tauri::Emitter;
 
 /// 爬虫结构体
 pub struct Scraper {
@@ -26,8 +25,7 @@ impl Scraper {
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
         // 配置代理
-        if options.proxy_enabled && options.proxy.is_some() {
-            let proxy_url = options.proxy.as_ref().unwrap();
+        if let Some(proxy_url) = &options.proxy {
             let proxy = reqwest::Proxy::all(proxy_url)?;
             client_builder = client_builder.proxy(proxy);
         }
@@ -43,7 +41,7 @@ impl Scraper {
 
         // 构建搜索 URL
         let base_url = "https://www.wnacg.com/search/index.php";
-        let chinese_only = if self.options.search_chinese_only { "yes" } else { "no" };
+        let _chinese_only = if self.options.chinese_only { "yes" } else { "no" };
 
         // 获取第一页
         let first_page_url = format!(
@@ -76,7 +74,7 @@ impl Scraper {
 
         // 解析第一页的漫画
         let mut all_comics = Self::parse_comics(&html)?;
-        println!("✅ 第 1 页找到 {} 部漫画", all_comics.len());
+        println!("📄 第 1 页找到 {} 部漫画", all_comics.len());
 
         // 发送进度事件
         events::emit_search_progress(
@@ -118,7 +116,7 @@ impl Scraper {
                     let count = comics.len();
                     all_comics.extend(comics);
 
-                    println!("✅ 第 {} 页找到 {} 部漫画", page, count);
+                    println!("📄 第 {} 页找到 {} 部漫画", page, count);
 
                     // 发送进度事件
                     events::emit_search_progress(
@@ -181,7 +179,7 @@ impl Scraper {
 
         for element in document.select(&pager_selector) {
             if let Some(href) = element.value().attr("href") {
-                // 从 URL 中提取页码
+                // 从 URL 中提取页数
                 if let Some(p_param) = href.split('&').find(|s| s.starts_with("p=")) {
                     if let Ok(page) = p_param[2..].parse::<u32>() {
                         if page > max_page {
@@ -255,10 +253,10 @@ impl Scraper {
         }
 
         // 提取作者和分类
-        let mut author = String::new();
+        let author = String::new();
         let mut category = String::new();
-        let mut tags = vec![];
-        let mut upload_date = String::new();
+        let tags = vec![];
+        let upload_date = String::new();
 
         // 提取分类（通过 cate-* 类名）
         let span_selector = Selector::parse("span").unwrap();

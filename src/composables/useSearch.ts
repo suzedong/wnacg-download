@@ -39,7 +39,7 @@ export function useSearch() {
     try {
       // 监听搜索进度
       const unlisten = await listen('search_progress', (event: any) => {
-        const { current, total: totalPages, found_count } = event.payload;
+        const { current, total: totalPages } = event.payload;
         progress.value = current;
         total.value = totalPages;
       });
