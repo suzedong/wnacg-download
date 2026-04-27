@@ -3,6 +3,7 @@
 use crate::error::AppError;
 use crate::types::compare::MatchDetail;
 use crate::types::comic::{Comic, LocalComic};
+use regex::Regex;
 use reqwest::Client;
 use serde_json::json;
 use std::collections::HashMap;
@@ -57,6 +58,7 @@ impl AiMatcher {
 
         // 如果本地漫画为空，所有网站漫画都标记为需要下载
         if local_comics.is_empty() {
+            println!("⚠️ 本地漫画为空，跳过 AI 对比，所有漫画标记为需要下载");
             return Ok(website_comics
                 .iter()
                 .map(|comic| MatchDetail {
@@ -65,15 +67,23 @@ impl AiMatcher {
                     match_type: "need_download".to_string(),
                     confidence: 0.0,
                     reason: "本地无漫画".to_string(),
+                    algorithm: "本地".to_string(),
                 })
                 .collect());
+        }
+
+        // 检查 AI 配置
+        if self.api_url.is_empty() {
+            println!("⚠️ AI API 地址未配置，使用本地相似度匹配");
+            return self.local_match(website_comics, local_comics).await;
         }
 
         // 分批处理（避免 API 请求过大）
         let batch_size = 20;
         let mut all_details = vec![];
 
-        for chunk in website_comics.chunks(batch_size) {
+        for (i, chunk) in website_comics.chunks(batch_size).enumerate() {
+            println!("🔄 正在对比第 {}/{} 批...", i + 1, (website_comics.len() + batch_size - 1) / batch_size);
             let details = self
                 .match_batch(chunk, local_comics)
                 .await?;
@@ -248,6 +258,7 @@ impl AiMatcher {
                         match_type: match_type.to_string(),
                         confidence,
                         reason,
+                        algorithm: "AI".to_string(),
                     });
                 }
             }
@@ -267,6 +278,7 @@ impl AiMatcher {
                     match_type: "need_download".to_string(),
                     confidence: 0.0,
                     reason: "AI 未匹配到本地漫画".to_string(),
+                    algorithm: "AI".to_string(),
                 });
             }
         }
@@ -297,5 +309,142 @@ impl AiMatcher {
         }
 
         Err(AppError::AiError("无法从 AI 响应中提取 JSON".to_string()))
+    }
+
+    /// 本地相似度匹配（不使用 AI API）
+    async fn local_match(
+        &self,
+        website_comics: &[Comic],
+        local_comics: &[LocalComic],
+    ) -> Result<Vec<MatchDetail>, AppError> {
+        println!(" 使用本地相似度算法进行匹配");
+        
+        let mut details = vec![];
+        let mut matched_local: Vec<String> = vec![];
+
+        for website in website_comics {
+            let mut best_match: Option<&LocalComic> = None;
+            let mut best_score = 0.0;
+
+            // 清理网站漫画标题前缀
+            let clean_website_title = Self::clean_title_prefix(&website.title);
+
+            for local in local_comics {
+                if matched_local.contains(&local.title) {
+                    continue;
+                }
+
+                // 清理本地漫画标题前缀
+                let clean_local_title = Self::clean_title_prefix(&local.title);
+
+                let score = Self::calculate_similarity(&clean_website_title, &clean_local_title);
+                if score > best_score {
+                    best_score = score;
+                    best_match = Some(local);
+                }
+            }
+
+            if let Some(local) = best_match {
+                if best_score >= self.match_threshold {
+                    matched_local.push(local.title.clone());
+                    details.push(MatchDetail {
+                        website: website.clone(),
+                        local: Some(local.clone()),
+                        match_type: "already_have".to_string(),
+                        confidence: best_score,
+                        reason: format!("本地相似度匹配 ({:.0}%)", best_score * 100.0),
+                        algorithm: "本地".to_string(),
+                    });
+                } else {
+                    details.push(MatchDetail {
+                        website: website.clone(),
+                        local: None,
+                        match_type: "need_download".to_string(),
+                        confidence: best_score,
+                        reason: format!("相似度不足 ({:.0}% < {:.0}%)", best_score * 100.0, self.match_threshold * 100.0),
+                        algorithm: "本地".to_string(),
+                    });
+                }
+            } else {
+                details.push(MatchDetail {
+                    website: website.clone(),
+                    local: None,
+                    match_type: "need_download".to_string(),
+                    confidence: 0.0,
+                    reason: "本地无匹配".to_string(),
+                    algorithm: "本地".to_string(),
+                });
+            }
+        }
+
+        println!("✅ 本地匹配完成，共 {} 条结果", details.len());
+        Ok(details)
+    }
+
+    /// 计算两个字符串的相似度（基于编辑距离）
+    fn calculate_similarity(s1: &str, s2: &str) -> f64 {
+        if s1.is_empty() && s2.is_empty() {
+            return 1.0;
+        }
+        if s1.is_empty() || s2.is_empty() {
+            return 0.0;
+        }
+
+        let s1_lower = s1.to_lowercase();
+        let s2_lower = s2.to_lowercase();
+
+        // 完全匹配
+        if s1_lower == s2_lower {
+            return 1.0;
+        }
+
+        // 包含关系
+        if s1_lower.contains(&s2_lower) || s2_lower.contains(&s1_lower) {
+            let min_len = s1_lower.len().min(s2_lower.len()) as f64;
+            let max_len = s1_lower.len().max(s2_lower.len()) as f64;
+            return min_len / max_len * 0.9;
+        }
+
+        // 编辑距离相似度
+        let distance = Self::levenshtein_distance(&s1_lower, &s2_lower);
+        let max_len = s1_lower.len().max(s2_lower.len()) as f64;
+        let similarity = 1.0 - (distance as f64 / max_len);
+        
+        similarity.max(0.0)
+    }
+
+    /// 计算莱文斯坦距离（编辑距离）
+    fn levenshtein_distance(s1: &str, s2: &str) -> usize {
+        let s1_chars: Vec<char> = s1.chars().collect();
+        let s2_chars: Vec<char> = s2.chars().collect();
+        let len1 = s1_chars.len();
+        let len2 = s2_chars.len();
+
+        let mut matrix = vec![vec![0usize; len2 + 1]; len1 + 1];
+
+        for i in 0..=len1 {
+            matrix[i][0] = i;
+        }
+        for j in 0..=len2 {
+            matrix[0][j] = j;
+        }
+
+        for i in 1..=len1 {
+            for j in 1..=len2 {
+                let cost = if s1_chars[i - 1] == s2_chars[j - 1] { 0 } else { 1 };
+                matrix[i][j] = (matrix[i - 1][j] + 1)
+                    .min(matrix[i][j - 1] + 1)
+                    .min(matrix[i - 1][j - 1] + cost);
+            }
+        }
+
+        matrix[len1][len2]
+    }
+
+    /// 清理漫画名前缀：去除 [], (), ()[], []() 等前缀
+    fn clean_title_prefix(title: &str) -> String {
+        // 正则表达式匹配开头的 [], (), 以及它们的组合
+        let re = Regex::new(r"^(?:\[.*?\]|\(.*?\)|\[.*?\]\(.*?\)|\(.*?\)\[.*?\])*\s*").unwrap();
+        re.replace(title, "").trim().to_string()
     }
 }

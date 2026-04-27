@@ -3,6 +3,7 @@
 use crate::error::AppError;
 use crate::types::comic::LocalComic;
 use chrono::Local;
+use regex::Regex;
 use std::fs;
 use std::path::Path;
 
@@ -14,20 +15,32 @@ impl Scanner {
     pub async fn scan_local(path: &str) -> Result<Vec<LocalComic>, AppError> {
         println!("📂 开始扫描本地文件夹：{}", path);
 
-        let path = Path::new(path);
+        // 处理 SMB 路径格式
+        let normalized_path = if path.starts_with("\\\\") || path.starts_with("//") {
+            path.replace("//", "\\")
+        } else {
+            path.to_string()
+        };
 
-        if !path.exists() {
-            return Err(AppError::ConfigError(format!("文件夹不存在：{}", path.display())));
+        let path_obj = Path::new(&normalized_path);
+
+        // 检查路径是否存在
+        if !path_obj.exists() {
+            println!("❌ 文件夹不存在或无法访问：{}", path_obj.display());
+            println!("   提示：如果是 SMB 网络路径，请确认网络连接和权限");
+            return Err(AppError::ConfigError(format!("文件夹不存在或无法访问：{}", path_obj.display())));
         }
 
-        if !path.is_dir() {
-            return Err(AppError::ConfigError(format!("不是有效的文件夹：{}", path.display())));
+        if !path_obj.is_dir() {
+            return Err(AppError::ConfigError(format!("不是有效的文件夹：{}", path_obj.display())));
         }
+
+        println!("✅ 文件夹验证成功，开始扫描...");
 
         let mut comics = vec![];
 
         // 遍历文件夹
-        Self::scan_directory(path, &mut comics)?;
+        Self::scan_directory(path_obj, &mut comics)?;
 
         println!("✅ 扫描完成，找到 {} 部本地漫画", comics.len());
 
@@ -42,8 +55,18 @@ impl Scanner {
             let entry = entry?;
             let path = entry.path();
 
-            if path.is_dir() {
-                // 检查是否是漫画文件夹（包含图片文件）
+            if path.is_file() {
+                // 检查是否是漫画压缩包
+                if let Some(ext) = path.extension() {
+                    let ext = ext.to_string_lossy().to_lowercase();
+                    if ["zip", "rar", "cbz", "cbr", "7z"].contains(&ext.as_str()) {
+                        if let Some(comic) = Self::extract_comic_from_archive(&path) {
+                            comics.push(comic);
+                        }
+                    }
+                }
+            } else if path.is_dir() {
+                // 检查是否是漫画文件夹（包含图片）
                 if Self::is_comic_folder(&path) {
                     if let Some(comic) = Self::extract_comic_info(&path) {
                         comics.push(comic);
@@ -58,33 +81,52 @@ impl Scanner {
         Ok(())
     }
 
-    /// 检查文件夹是否是漫画文件夹
-    fn is_comic_folder(dir: &Path) -> bool {
-        if let Ok(entries) = fs::read_dir(dir) {
-            let mut has_images = false;
-            let mut image_count = 0;
+    /// 从压缩包提取漫画信息
+    fn extract_comic_from_archive(path: &Path) -> Option<LocalComic> {
+        let title = path
+            .file_stem()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
 
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(ext) = path.extension() {
-                        let ext = ext.to_string_lossy().to_lowercase();
-                        if ["jpg", "jpeg", "png", "gif", "webp"].contains(&ext.as_str()) {
-                            has_images = true;
-                            image_count += 1;
-                        }
-                    }
-                }
-            }
-
-            // 如果包含 3 张以上图片，认为是漫画文件夹
-            has_images && image_count >= 3
-        } else {
-            false
+        if title.is_empty() {
+            return None;
         }
+
+        // 清理标题中的 HTML 实体
+        let clean_title = Self::clean_title(&title);
+
+        let file_size = fs::metadata(path).ok()?.len();
+
+        Some(LocalComic {
+            path: path.to_string_lossy().to_string(),
+            title: clean_title,
+            file_size,
+            page_count: 1,
+            download_date: Local::now().format("%Y-%m-%d").to_string(),
+        })
     }
 
-    /// 提取漫画信息
+    /// 清理标题中的 HTML 实体和特殊字符
+    fn clean_title(title: &str) -> String {
+        let cleaned = title
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&#x27;", "'");
+        
+        // 清理漫画名前缀：去除 [], (), ()[], []() 等前缀
+        let re = Regex::new(r"^(?:\[.*?\]|\(.*?\)|\[.*?\]\(.*?\)|\(.*?\)\[.*?\])*\s*").unwrap();
+        let trimmed = re.replace(&cleaned, "").trim().to_string();
+        
+        // 去除多余空格
+        trimmed.replace('\u{00a0}', " ").split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+
+    /// 提取漫画信息（文件夹）
     fn extract_comic_info(path: &Path) -> Option<LocalComic> {
         let title = path
             .file_name()
@@ -96,16 +138,42 @@ impl Scanner {
             return None;
         }
 
+        // 清理标题中的 HTML 实体
+        let clean_title = Self::clean_title(&title);
+
         // 计算文件夹大小和图片数量
         let (file_size, page_count) = Self::calculate_folder_stats(path);
 
         Some(LocalComic {
             path: path.to_string_lossy().to_string(),
-            title,
+            title: clean_title,
             file_size,
             page_count,
             download_date: Local::now().format("%Y-%m-%d").to_string(),
         })
+    }
+    /// 检查文件夹是否是漫画文件夹（包含 3 张以上图片）
+    fn is_comic_folder(dir: &Path) -> bool {
+        if let Ok(entries) = fs::read_dir(dir) {
+            let mut image_count = 0;
+
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(ext) = path.extension() {
+                        let ext = ext.to_string_lossy().to_lowercase();
+                        if ["jpg", "jpeg", "png", "gif", "webp"].contains(&ext.as_str()) {
+                            image_count += 1;
+                        }
+                    }
+                }
+            }
+
+            // 包含 3 张以上图片，认为是漫画文件夹
+            image_count >= 3
+        } else {
+            false
+        }
     }
 
     /// 计算文件夹统计信息

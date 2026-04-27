@@ -120,9 +120,20 @@ async function search(keyword, pageNum = 1) {
             category = CATEGORY_MAP[cateClass] || '';
           }
           
-          // 获取标题，去除 <em> 标签
+          // 获取标题，清理 HTML 标签和实体
           let title = img.getAttribute('alt') || '';
-          title = title.replace(/<\/?em>/gi, '').trim();
+          // 去除 <em> 标签
+          title = title.replace(/<\/?em>/gi, '');
+          // 清理 HTML 实体
+          title = title.replace(/&nbsp;/g, ' ')
+                       .replace(/&amp;/g, '&')
+                       .replace(/&lt;/g, '<')
+                       .replace(/&gt;/g, '>')
+                       .replace(/&quot;/g, '"')
+                       .replace(/&#39;/g, "'")
+                       .replace(/&#x27;/g, "'");
+          // 去除多余空格并trim（保留 [] 和 () 前缀）
+          title = title.replace(/\s+/g, ' ').trim();
 
           // 提取图片数量和创建日期
           let pages = 0;

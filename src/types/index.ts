@@ -87,6 +87,7 @@ export interface MatchDetail {
   match_type: string;
   confidence: number;
   reason: string;
+  algorithm: string;
 }
 
 // 配置结构

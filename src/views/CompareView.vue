@@ -7,14 +7,14 @@
         <div class="form-group">
           <label>选择搜索缓存文件</label>
           <div class="input-group">
-            <input
-              v-model="searchFile"
-              type="text"
-              placeholder="搜索缓存文件路径或点击浏览..."
-              readonly
-            />
-            <button class="btn-secondary" @click="browseSearchFile">
-              📂 浏览
+            <select v-model="searchFile" class="select-input">
+              <option value="" disabled>请选择搜索缓存文件</option>
+              <option v-for="file in cacheFiles" :key="file.path" :value="file.path">
+                {{ file.label }}
+              </option>
+            </select>
+            <button class="btn-secondary" @click="loadCacheFiles">
+              🔄 刷新
             </button>
           </div>
         </div>
@@ -25,8 +25,7 @@
             <input
               v-model="localPath"
               type="text"
-              placeholder="选择要扫描的文件夹路径..."
-              readonly
+              placeholder="输入文件夹路径或 SMB 地址..."
             />
             <button class="btn-secondary" @click="browseLocalPath">
               📁 浏览
@@ -55,7 +54,10 @@
     </div>
 
     <div v-if="error" class="error-message">
-      {{ error }}
+      <p>{{ error }}</p>
+      <button class="btn-primary" @click="handleRetry">
+        🔄 重试
+      </button>
     </div>
 
     <div v-if="compareResult" class="results-section">
@@ -81,9 +83,26 @@
       <div v-if="needDownload.length > 0" class="result-section">
         <div class="section-header">
           <h3>📥 需要下载的漫画 ({{ needDownload.length }})</h3>
-          <button class="btn-primary" @click="addAllToDownload">
-            ➕ 全部下载
-          </button>
+          <div class="header-actions">
+            <label class="select-all-label">
+              <input 
+                type="checkbox" 
+                :checked="isAllSelected" 
+                @change="toggleSelectAll" 
+              />
+              全选
+            </label>
+            <button 
+              class="btn-primary" 
+              :disabled="selectedForDownload.length === 0"
+              @click="addSelectedToDownload"
+            >
+              ➕ 添加选中 ({{ selectedForDownload.length }})
+            </button>
+            <button class="btn-secondary" @click="addAllToDownload">
+              ➕ 全部下载
+            </button>
+          </div>
         </div>
         <div class="comic-grid">
           <div
@@ -92,15 +111,26 @@
             class="comic-card"
           >
             <div class="card-checkbox">
-              <input type="checkbox" v-model="selectedForDownload" :value="detail.website.aid" />
+              <input 
+                type="checkbox" 
+                :checked="selectedForDownload.includes(detail.website.aid)"
+                @change="toggleSelect(detail.website.aid)" 
+              />
             </div>
-            <img :src="detail.website.cover_url" :alt="detail.website.title" />
+            <div class="comic-cover-wrapper">
+              <img :src="detail.website.cover_url" :alt="detail.website.title" />
+              <span v-if="detail.website.category" class="category-badge">{{ detail.website.category }}</span>
+            </div>
             <h4>{{ detail.website.title }}</h4>
-            <p class="comic-author">{{ detail.website.author }}</p>
-            <p class="comic-category">{{ detail.website.category }}</p>
+            <div class="comic-info">
+              <span class="comic-pages" v-if="detail.website.pages > 0">{{ detail.website.pages }} 张</span>
+              <span class="comic-date" v-if="detail.website.upload_date">{{ detail.website.upload_date }}</span>
+            </div>
             <div class="match-info">
               <span class="confidence">匹配度: {{ (detail.confidence * 100).toFixed(0) }}%</span>
+              <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
+            <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
         </div>
       </div>
@@ -113,10 +143,20 @@
             :key="detail.website.aid"
             class="comic-card owned"
           >
-            <img :src="detail.website.cover_url" :alt="detail.website.title" />
+            <div class="comic-cover-wrapper">
+              <img :src="detail.website.cover_url" :alt="detail.website.title" />
+              <span v-if="detail.website.category" class="category-badge">{{ detail.website.category }}</span>
+            </div>
             <h4>{{ detail.website.title }}</h4>
-            <p class="comic-author">{{ detail.website.author }}</p>
-            <p class="local-path">本地: {{ detail.local?.path }}</p>
+            <div class="comic-info">
+              <span class="comic-pages" v-if="detail.website.pages > 0">{{ detail.website.pages }} 张</span>
+              <span class="comic-date" v-if="detail.website.upload_date">{{ detail.website.upload_date }}</span>
+            </div>
+            <div class="match-info">
+              <span class="confidence">匹配度: {{ (detail.confidence * 100).toFixed(0) }}%</span>
+              <span class="algorithm-badge">{{ detail.algorithm }}</span>
+            </div>
+            <p class="matched-local" v-if="detail.local">匹配: {{ detail.local.title }}</p>
           </div>
         </div>
       </div>
@@ -131,10 +171,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useCompare } from '../composables/useCompare';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
 import { CompareResult, MatchDetail, DownloadTask } from '../types/index';
+import { readDir, readTextFile } from '@tauri-apps/plugin-fs';
+import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
 const { isComparing, progress, total, result, error, compare } = useCompare();
@@ -143,6 +185,7 @@ const { addToQueue } = useDownloadQueue();
 const searchFile = ref('');
 const localPath = ref('');
 const selectedForDownload = ref<string[]>([]);
+const cacheFiles = ref<Array<{ path: string; label: string }>>([]);
 
 const compareResult = computed(() => result.value as CompareResult | null);
 
@@ -150,37 +193,85 @@ const hasSearchResult = computed(() => !!compareResult.value);
 
 const needDownload = computed(() => {
   if (!compareResult.value) return [];
-  return compareResult.value.match_details.filter(
-    (d: MatchDetail) => d.match_type === 'need_download'
-  );
+  return compareResult.value.match_details
+    .filter((d: MatchDetail) => d.match_type === 'need_download')
+    .sort((a: MatchDetail, b: MatchDetail) => a.confidence - b.confidence);
 });
 
 const alreadyHave = computed(() => {
   if (!compareResult.value) return [];
-  return compareResult.value.match_details.filter(
-    (d: MatchDetail) => d.match_type === 'already_have'
+  return compareResult.value.match_details
+    .filter((d: MatchDetail) => d.match_type === 'already_have')
+    .sort((a: MatchDetail, b: MatchDetail) => b.confidence - a.confidence);
+});
+
+const selectedNeedDownload = computed(() => {
+  return needDownload.value.filter(
+    (d: MatchDetail) => selectedForDownload.value.includes(d.website.aid)
   );
 });
 
-async function browseSearchFile() {
+const isAllSelected = computed(() => {
+  return needDownload.value.length > 0 && 
+         selectedForDownload.value.length === needDownload.value.length;
+});
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedForDownload.value = [];
+  } else {
+    selectedForDownload.value = needDownload.value.map((d: MatchDetail) => d.website.aid);
+  }
+}
+
+async function loadCacheFiles() {
   try {
-    // 检查是否在 Tauri 环境中
     if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
-      const result = await open({
-        multiple: false,
-        filters: [
-          { name: '搜索缓存文件', extensions: ['json'] }
-        ],
-        defaultPath: './cache'
-      });
-      if (result) {
-        searchFile.value = result as string;
+      const resourceDirPath = await resourceDir();
+      const possibleCacheDirs = [
+        'cache',
+        'src-tauri/target/debug/cache',
+        'target/debug/cache'
+      ];
+      
+      for (const dir of possibleCacheDirs) {
+        try {
+          const cacheDir = await join(resourceDirPath, dir);
+          const files = await readDir(cacheDir);
+          
+          const file_list: Array<{ path: string; label: string }> = [];
+          
+          for (const file of files) {
+            if (file.name.endsWith('.json') && file.name.startsWith('search_')) {
+              const filePath = await join(cacheDir, file.name);
+              const keywordMatch = file.name.match(/search_(.+?)\.json/);
+              const keyword = keywordMatch ? keywordMatch[1].replace(/_/g, ' ') : '未知';
+              
+              try {
+                const content = await readTextFile(filePath);
+                const comics = JSON.parse(content);
+                const count = comics.length;
+                const timeStr = new Date().toLocaleString();
+                
+                file_list.push({
+                  path: filePath,
+                  label: `${keyword} (${count} 部)`
+                });
+              } catch (e) {
+                console.error('读取缓存文件失败：', e);
+              }
+            }
+          }
+          
+          cacheFiles.value = file_list;
+          return;
+        } catch (e) {
+          continue;
+        }
       }
-    } else {
-      console.log('非 Tauri 环境，跳过文件选择');
     }
   } catch (e: any) {
-    error.value = `选择文件失败：${e.message}`;
+    error.value = `加载缓存文件失败：${e.message}`;
   }
 }
 
@@ -208,6 +299,34 @@ async function handleCompare() {
   await compare(searchFile.value, localPath.value);
 }
 
+function toggleSelect(aid: string) {
+  const index = selectedForDownload.value.indexOf(aid);
+  if (index === -1) {
+    selectedForDownload.value.push(aid);
+  } else {
+    selectedForDownload.value.splice(index, 1);
+  }
+}
+
+function addSelectedToDownload() {
+  const toDownload = selectedNeedDownload.value.map((d: MatchDetail) => {
+    return {
+      aid: d.website.aid,
+      title: d.website.title,
+      url: d.website.url,
+      cover_url: d.website.cover_url,
+      save_path: localPath.value
+    } as DownloadTask;
+  });
+  
+  const addedCount = addToQueue(toDownload);
+  console.log(`添加了 ${addedCount} 个任务到下载队列`);
+  
+  if (addedCount > 0) {
+    alert(`已添加 ${addedCount} 个漫画到下载队列`);
+  }
+}
+
 function addAllToDownload() {
   const toDownload = needDownload.value.map((d: MatchDetail) => {
     return {
@@ -215,14 +334,13 @@ function addAllToDownload() {
       title: d.website.title,
       url: d.website.url,
       cover_url: d.website.cover_url,
-      save_path: localPath.value // 使用选择的本地路径
+      save_path: localPath.value
     } as DownloadTask;
   });
   
   const addedCount = addToQueue(toDownload);
   console.log(`添加了 ${addedCount} 个任务到下载队列`);
   
-  // 显示提示信息
   if (addedCount > 0) {
     alert(`已添加 ${addedCount} 个漫画到下载队列`);
   }
@@ -234,6 +352,15 @@ function resetCompare() {
   localPath.value = '';
   selectedForDownload.value = [];
 }
+
+async function handleRetry() {
+  error.value = '';
+  await handleCompare();
+}
+
+onMounted(() => {
+  loadCacheFiles();
+});
 </script>
 
 <style scoped>
@@ -276,6 +403,27 @@ h3 {
   font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.form-group .btn-sm {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.select-input {
+  padding: 12px 16px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  width: 100%;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: #667eea;
 }
 
 .input-group {
@@ -325,6 +473,7 @@ h3 {
   font-size: 14px;
   font-weight: 600;
   transition: background 0.2s;
+  white-space: nowrap;
 }
 
 .btn-secondary:hover {
@@ -359,11 +508,26 @@ h3 {
 }
 
 .error-message {
-  padding: 12px;
+  padding: 16px;
   background: #fee;
   color: #f56c6c;
   border-radius: 8px;
   margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.error-message p {
+  margin: 0;
+  flex: 1;
+}
+
+.error-message .btn-primary {
+  padding: 8px 16px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .results-section {
@@ -416,6 +580,27 @@ h3 {
   margin-bottom: 16px;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.select-all-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
 .comic-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -443,7 +628,7 @@ h3 {
   position: absolute;
   top: 8px;
   left: 8px;
-  z-index: 1;
+  z-index: 2;
 }
 
 .card-checkbox input[type="checkbox"] {
@@ -452,30 +637,61 @@ h3 {
   cursor: pointer;
 }
 
-.comic-card img {
+.comic-cover-wrapper {
+  position: relative;
+  margin-bottom: 8px;
+}
+
+.comic-cover-wrapper img {
   width: 100%;
-  height: 240px;
+  height: 260px;
   object-fit: cover;
   border-radius: 8px;
-  margin-bottom: 8px;
+  transition: opacity 0.2s;
+}
+
+.comic-cover-wrapper:hover img {
+  opacity: 0.85;
+}
+
+.category-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .comic-card h4 {
   font-size: 14px;
   color: var(--text-primary);
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  margin-bottom: 8px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
-.comic-author,
-.comic-category {
+.comic-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.comic-pages {
   font-size: 12px;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.comic-date {
+  font-size: 11px;
   color: var(--text-secondary);
-  margin-bottom: 4px;
 }
 
 .local-path {
@@ -484,18 +700,48 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-top: 4px;
 }
 
 .match-info {
   margin-top: 8px;
   padding-top: 8px;
   border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .confidence {
   font-size: 12px;
   color: var(--primary);
   font-weight: 600;
+}
+
+.algorithm-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--primary-gradient);
+  color: #fff;
+  font-weight: 600;
+}
+
+.match-reason {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  margin-bottom: 0;
+}
+
+.matched-local {
+  font-size: 11px;
+  color: var(--success);
+  margin-top: 4px;
+  margin-bottom: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .actions {

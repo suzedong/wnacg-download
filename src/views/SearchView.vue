@@ -926,11 +926,8 @@ h3 {
   font-size: 14px;
   color: var(--text-primary);
   margin-bottom: 8px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .comic-meta {

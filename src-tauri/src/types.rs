@@ -162,6 +162,8 @@ pub mod compare {
         pub confidence: f64,
         /// 匹配理由
         pub reason: String,
+        /// 匹配算法
+        pub algorithm: String, // "本地" 或 "AI"
     }
 }
 
