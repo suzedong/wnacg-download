@@ -52,7 +52,7 @@
 
 ### 搜索规则
 - 爬取所有页面，无页数限制
-- **搜索不缓存**：每次都从网站获取最新数据，搜索结果保存到本地文件供对比使用
+- **搜索结果持久化存储**：每次都从网站获取最新数据，搜索结果保存到本地文件供对比使用
 - 只搜索汉化版漫画：过滤条件为 `category` 字段包含"漢化"字样（可通过配置包含所有漫画）
 - 爬取地址：`https://www.wnacg.com/search/index.php?q={keyword}&m=&syn=yes&f=_all&s=create_time_DESC&p={page}`
 - **使用 Playwright 浏览器自动化**：通过 `scripts/search_with_playwright.js` 脚本打开真实浏览器进行搜索

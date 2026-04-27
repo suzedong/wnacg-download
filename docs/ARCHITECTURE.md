@@ -104,7 +104,6 @@
 src/
 ├── components/                  # 可复用组件
 │   ├── Sidebar.vue             # 侧边栏导航
-│   ├── Header.vue              # 自定义标题栏
 │   ├── ComicCard.vue           # 漫画卡片
 │   ├── StatCard.vue            # 统计卡片
 │   ├── QueueItem.vue           # 队列项
@@ -625,7 +624,7 @@ try {
 - 防抖/节流
 
 ### 8.3 缓存策略
-- 搜索结果保存（程序目录 cache/ JSON 文件，每次搜索重新爬取）
+- 搜索结果持久化存储（程序目录 cache/ JSON 文件，每次搜索重新爬取）
 - AI 匹配结果缓存
 - 配置缓存（程序目录 config/ JSON 文件）
 - Playwright 浏览器自动化（避免 Cloudflare 问题）

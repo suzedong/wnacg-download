@@ -213,8 +213,8 @@ node --version          # 应 >= 18.0.0
 npm --version           # 应 >= 9.0.0
 
 # Rust
-rustc --version         # 应 >= 1.70.0
-cargo --version         # 应 >= 1.70.0
+rustc --version         # 应 >= 1.75.0
+cargo --version         # 应 >= 1.75.0
 
 # 项目依赖
 pnpm list             # 应显示所有依赖
