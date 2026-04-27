@@ -15,12 +15,40 @@ use std::time::Duration;
 /// 判断分类是否为汉化内容
 #[allow(dead_code)]
 fn is_chinese_category(category: &str) -> bool {
-    // 根据 WNACG 网站的分类标识，汉化内容通常包含特定关键词
-    // 这里使用宽松的判断，包含"汉化"、"中文"等关键词
-    category.contains("汉化") || 
-    category.contains("中文") || 
-    category.contains("汉") ||
-    category.is_empty() // 空分类默认为汉化
+    // 根据 WNACG 网站的分类标识，有"漢化"字样的代表是汉化的
+    category.contains("漢化")
+}
+
+/// 将 cate-* 类名转换为分类名称
+fn cate_class_to_category(cate_class: &str) -> String {
+    match cate_class {
+        "cate-1" => "同人誌／漢化",
+        "cate-2" => "同人誌／CG畫集",
+        "cate-3" => "寫真 & Cosplay",
+        "cate-4" => "",
+        "cate-5" => "同人誌",
+        "cate-6" => "單行本",
+        "cate-7" => "雜誌&短篇",
+        "cate-8" => "",
+        "cate-9" => "單行本／漢化",
+        "cate-10" => "雜誌&短篇／漢化",
+        "cate-11" => "",
+        "cate-12" => "同人誌／日語",
+        "cate-13" => "單行本／日語",
+        "cate-14" => "雜誌&短篇／日語",
+        "cate-15" => "",
+        "cate-16" => "同人誌／English",
+        "cate-17" => "單行本／English",
+        "cate-18" => "雜誌&短篇／English",
+        "cate-19" => "韓漫",
+        "cate-20" => "韓漫／漢化",
+        "cate-21" => "韓漫／生肉",
+        "cate-22" => "3D&漫畫",
+        "cate-23" => "3D&漫畫／漢化",
+        "cate-24" => "3D&漫畫／其他",
+        "cate-37" => "AI&圖集",
+        _ => "",
+    }.to_string()
 }
 
 /// 爬虫结构体
@@ -202,12 +230,7 @@ impl Scraper {
         Ok(html)
     }
 
-    /// 检查是否是 Cloudflare 验证页面
-    /// 检查是否为 Cloudflare 验证页面
-    #[allow(dead_code)]
-    fn is_cloudflare_challenge(html: &str) -> bool {
-        html.contains("challenge-platform") || html.contains("cf-challenge") || html.contains("Checking your browser")
-    }
+
 
     /// 解析总页数
     fn parse_total_pages(html: &str) -> Result<u32, AppError> {
@@ -242,8 +265,8 @@ impl Scraper {
         let document = Html::parse_document(html);
         let mut comics = vec![];
 
-        // 选择器：漫画卡片
-        let card_selector = Selector::parse("div.asTB").unwrap();
+        // 选择器：漫画卡片（li.gallary_item）
+        let card_selector = Selector::parse("li.gallary_item").unwrap();
 
         for card in document.select(&card_selector) {
             if let Some(comic) = Self::parse_comic_card(&card) {
@@ -256,7 +279,23 @@ impl Scraper {
 
     /// 解析单个漫画卡片
     fn parse_comic_card(card: &scraper::ElementRef) -> Option<Comic> {
-        // 提取链接
+        // 提取分类（从 div.pic_box 的类名中）
+        let mut category = String::new();
+        let pic_box_selector = Selector::parse("div.pic_box").unwrap();
+        if let Some(pic_box) = card.select(&pic_box_selector).next() {
+            if let Some(class) = pic_box.value().attr("class") {
+                // 查找包含 cate-* 的类名
+                let classes: Vec<&str> = class.split_whitespace().collect();
+                for class_name in classes {
+                    if class_name.starts_with("cate-") {
+                        category = cate_class_to_category(class_name);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 提取链接和封面图
         let link_selector = Selector::parse("a").unwrap();
         let mut aid = String::new();
         let mut url = String::new();
@@ -296,21 +335,10 @@ impl Scraper {
             return None;
         }
 
-        // 提取作者和分类
+        // 提取作者和标签
         let author = String::new();
-        let mut category = String::new();
         let tags = vec![];
         let upload_date = String::new();
-
-        // 提取分类（通过 cate-* 类名）
-        let span_selector = Selector::parse("span").unwrap();
-        for span in card.select(&span_selector) {
-            if let Some(class) = span.value().attr("class") {
-                if class.contains("cate-") {
-                    category = span.text().collect::<Vec<_>>().join("").trim().to_string();
-                }
-            }
-        }
 
         Some(Comic {
             aid,

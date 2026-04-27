@@ -133,9 +133,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useCompare } from '../composables/useCompare';
-import { CompareResult, MatchDetail } from '../types/index';
+import { useDownloadQueue } from '../composables/useDownloadQueue';
+import { CompareResult, MatchDetail, DownloadTask } from '../types/index';
+import { open } from '@tauri-apps/plugin-dialog';
 
 const { isComparing, progress, total, result, error, compare } = useCompare();
+const { addToQueue } = useDownloadQueue();
 
 const searchFile = ref('');
 const localPath = ref('');
@@ -161,7 +164,21 @@ const alreadyHave = computed(() => {
 
 async function browseSearchFile() {
   try {
-    error.value = '选择文件功能待实现，请手动输入文件路径';
+    // 检查是否在 Tauri 环境中
+    if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
+      const result = await open({
+        multiple: false,
+        filters: [
+          { name: '搜索缓存文件', extensions: ['json'] }
+        ],
+        defaultPath: './cache'
+      });
+      if (result) {
+        searchFile.value = result as string;
+      }
+    } else {
+      console.log('非 Tauri 环境，跳过文件选择');
+    }
   } catch (e: any) {
     error.value = `选择文件失败：${e.message}`;
   }
@@ -169,7 +186,18 @@ async function browseSearchFile() {
 
 async function browseLocalPath() {
   try {
-    error.value = '选择文件夹功能待实现，请手动输入文件夹路径';
+    // 检查是否在 Tauri 环境中
+    if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
+      const result = await open({
+        multiple: false,
+        directory: true
+      });
+      if (result) {
+        localPath.value = result as string;
+      }
+    } else {
+      console.log('非 Tauri 环境，跳过文件夹选择');
+    }
   } catch (e: any) {
     error.value = `选择文件夹失败：${e.message}`;
   }
@@ -181,13 +209,23 @@ async function handleCompare() {
 }
 
 function addAllToDownload() {
-  const toDownload = needDownload.value.filter(
-    (d: MatchDetail) => !selectedForDownload.value.includes(d.website.aid)
-  );
-  toDownload.forEach((d: MatchDetail) => {
-    selectedForDownload.value.push(d.website.aid);
+  const toDownload = needDownload.value.map((d: MatchDetail) => {
+    return {
+      aid: d.website.aid,
+      title: d.website.title,
+      url: d.website.url,
+      cover_url: d.website.cover_url,
+      save_path: localPath.value // 使用选择的本地路径
+    } as DownloadTask;
   });
-  console.log('添加到下载队列：', selectedForDownload.value);
+  
+  const addedCount = addToQueue(toDownload);
+  console.log(`添加了 ${addedCount} 个任务到下载队列`);
+  
+  // 显示提示信息
+  if (addedCount > 0) {
+    alert(`已添加 ${addedCount} 个漫画到下载队列`);
+  }
 }
 
 function resetCompare() {

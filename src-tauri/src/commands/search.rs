@@ -7,6 +7,8 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
 use std::thread;
 use tauri::Emitter;
 use tauri::command;
@@ -27,26 +29,44 @@ pub async fn search_comics(
     keyword: String,
     options: SearchOptions,
 ) -> Result<SearchResult, String> {
-    println!("🔍 收到搜索请求：{}", keyword);
+    println!("[搜索] 开始搜索：{}", keyword);
 
-    // 获取脚本路径
-    let script_path = std::env::current_dir()
-        .map_err(|e| format!("获取当前目录失败：{}", e))?
-        .parent()
-        .ok_or("无法获取项目目录")?
-        .join("scripts")
-        .join("search_with_playwright.js");
+    // 获取脚本路径 - 从当前目录向上查找，直到找到包含 package.json 的目录
+    let current = std::env::current_dir()
+        .map_err(|e| format!("获取当前目录失败：{}", e))?;
+    
+    // 向上查找项目根目录（包含 package.json 的目录）
+    let mut project_root = current.clone();
+    for _ in 0..10 {
+        if project_root.join("package.json").exists() {
+            break;
+        }
+        if let Some(parent) = project_root.parent() {
+            project_root = parent.to_path_buf();
+        } else {
+            break;
+        }
+    }
+    
+    let script_path = project_root.join("scripts").join("search_with_playwright.js");
+    println!("[搜索] 项目根目录：{}", project_root.display());
 
-    println!("🌐 使用 Playwright 搜索...");
+    println!("[搜索] 脚本路径：{}", script_path.display());
 
     // 步骤 1：打开第一页，获取总页数
-    println!("📄 步骤 1：打开第一页...");
+    println!("[搜索] 获取第一页...");
     let first_result = run_playwright_script(&script_path, &keyword, 1)?;
     let total_pages = first_result.total_pages;
     let mut all_comics = first_result.comics;
 
-    println!("📄 总页数：{}", total_pages);
-    println!("📊 第 1 页找到 {} 部漫画", all_comics.len());
+    println!("[搜索] 总页数：{}，第 1 页找到 {} 部", total_pages, all_comics.len());
+
+    // 发送进度事件
+    let _ = app.emit("search_progress", serde_json::json!({
+        "current": 1,
+        "total": total_pages,
+        "found": all_comics.len()
+    }));
 
     // 计算实际爬取页数
     let max_pages = if options.max_pages == 0 {
@@ -57,18 +77,30 @@ pub async fn search_comics(
 
     // 步骤 2：并行打开所有剩余页面
     if max_pages > 1 {
-        println!("📄 步骤 2：并行爬取剩余 {} 页...", max_pages - 1);
+        println!("[搜索] 并行爬取剩余 {} 页...", max_pages - 1);
 
         let pages: Vec<u32> = (2..=max_pages).collect();
+        let completed = Arc::new(AtomicU32::new(0));
         let mut handles = vec![];
 
         // 并行发起所有页面请求
         for &page in &pages {
             let script = script_path.clone();
             let kw = keyword.clone();
+            let app_clone = app.clone();
+            let completed_clone = completed.clone();
 
             let handle = thread::spawn(move || {
-                run_playwright_script(&script, &kw, page)
+                let result = run_playwright_script(&script, &kw, page);
+                // 更新完成计数
+                let count = completed_clone.fetch_add(1, Ordering::SeqCst) + 1;
+                // 发送进度事件
+                let _ = app_clone.emit("search_progress", serde_json::json!({
+                    "current": count + 1, // +1 因为第一页已经爬取
+                    "total": max_pages,
+                    "found": 0
+                }));
+                result
             });
 
             handles.push((page, handle));
@@ -79,22 +111,25 @@ pub async fn search_comics(
             match handle.join() {
                 Ok(result) => match result {
                     Ok(data) => {
+                        let count = data.comics.len();
+                        if count > 0 {
+                            println!("[搜索] 第 {} 页找到 {} 部", page, count);
+                        }
                         all_comics.extend(data.comics);
                     }
                     Err(e) => {
-                        eprintln!("⚠️ 第 {} 页爬取失败：{}", page, e);
+                        println!("[搜索] 第 {} 页失败：{}", page, e);
                     }
                 },
                 Err(_) => {
-                    eprintln!("⚠️ 第 {} 页线程执行失败", page);
+                    println!("[搜索] 第 {} 页线程执行失败", page);
                 }
             }
         }
     }
 
     // 步骤 3：去重
-    println!("📊 共找到 {} 部漫画（去重前）", all_comics.len());
-    println!("📄 步骤 3：去重...");
+    let before_dedup = all_comics.len();
     let mut seen_aids = HashSet::new();
     let mut unique_comics: Vec<Comic> = Vec::new();
 
@@ -104,19 +139,24 @@ pub async fn search_comics(
         }
     }
 
-    println!("📊 去重后共 {} 部漫画", unique_comics.len());
+    if before_dedup != unique_comics.len() {
+        println!("[搜索] 去重：{} -> {}", before_dedup, unique_comics.len());
+    }
 
-    // 步骤 4：过滤中文版（如果启用）
+    // 步骤 4：过滤汉化版（如果启用）
     if options.search_chinese_only {
+        let before_filter = unique_comics.len();
         unique_comics.retain(|c| {
-            !c.category.contains("中文") && !c.category.contains("chinese")
+            c.category.contains("漢化")
         });
-        println!("🇨🇳 过滤后剩余 {} 部汉化漫画", unique_comics.len());
+        if before_filter != unique_comics.len() {
+            println!("[搜索] 过滤汉化：{} -> {}", before_filter, unique_comics.len());
+        }
     }
 
     // 步骤 5：保存结果到文件
-    println!("📄 步骤 4：保存结果...");
     let file_path = save_results(&keyword, &unique_comics)?;
+    println!("[搜索] 结果已保存：{}", file_path);
 
     // 发送完成事件
     let _ = app.emit("search_complete", &unique_comics);
@@ -129,7 +169,7 @@ pub async fn search_comics(
         file_path,
     };
 
-    println!("✅ 搜索完成，找到 {} 部漫画，已保存到 {}", result.comics.len(), result.file_path);
+    println!("[搜索] 完成，找到 {} 部漫画", result.comics.len());
 
     Ok(result)
 }

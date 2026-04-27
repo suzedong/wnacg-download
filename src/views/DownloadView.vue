@@ -122,7 +122,9 @@ import { ref, computed } from 'vue';
 import { useDownload } from '../composables/useDownload';
 import { useConfig } from '../composables/useConfig';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
-import { DownloadResult } from '../types/index';
+import { DownloadResult, DownloadTask } from '../types/index';
+import { resolve } from '@tauri-apps/api/path';
+import { open } from '@tauri-apps/plugin-shell';
 
 const { isDownloading, progress, speed, error, result, startDownload: download } = useDownload();
 const { config, loadConfig } = useConfig();
@@ -159,14 +161,47 @@ function formatSpeed(bytesPerSecond: number): string {
   }
 }
 
-function openDownloadFolder() {
-  // TODO: 调用 Tauri Command 打开文件夹
-  console.log('打开下载文件夹');
+async function openDownloadFolder() {
+  try {
+    // 检查是否在 Tauri 环境中
+    if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
+      if (!config.value) {
+        await loadConfig();
+      }
+      
+      let downloadPath = config.value?.default_save_path || './downloads';
+      
+      // 解析路径
+      const resolvedPath = await resolve(downloadPath);
+      
+      // 打开文件夹
+      await open(resolvedPath);
+    } else {
+      console.log('非 Tauri 环境，跳过打开文件夹');
+    }
+  } catch (e: any) {
+    error.value = `打开文件夹失败：${e.message}`;
+  }
 }
 
 function retryFailed() {
-  // TODO: 重试失败的下载
-  console.log('重试失败的下载');
+  if (!downloadResult.value || downloadResult.value.failed_list.length === 0) return;
+  
+  // 将失败的任务重新添加到下载队列
+  const failedTasks = downloadResult.value.failed_list.map(failed => ({
+    aid: failed.title, // 使用标题作为 aid（实际应该从原始任务中获取）
+    title: failed.title,
+    url: '', // 这里需要从原始任务中获取，暂时留空
+    cover_url: '',
+    save_path: config.value?.default_save_path || './downloads',
+    pages: 0
+  } as DownloadTask));
+  
+  // 添加到队列
+  const { addToQueue } = useDownloadQueue();
+  const added = addToQueue(failedTasks);
+  
+  alert(`已将 ${added} 个失败任务重新添加到下载队列`);
 }
 
 function resetDownload() {

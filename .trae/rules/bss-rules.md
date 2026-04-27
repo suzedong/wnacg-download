@@ -53,7 +53,7 @@
 ### 搜索规则
 - 爬取所有页面，无页数限制
 - **搜索不缓存**：每次都从网站获取最新数据，搜索结果保存到本地文件供对比使用
-- 只搜索汉化版漫画（可通过配置包含所有漫画，根据分类标识过滤）
+- 只搜索汉化版漫画：过滤条件为 `category` 字段包含"漢化"字样（可通过配置包含所有漫画）
 - 爬取地址：`https://www.wnacg.com/search/index.php?q={keyword}&m=&syn=yes&f=_all&s=create_time_DESC&p={page}`
 - **使用 Playwright 浏览器自动化**：通过 `scripts/search_with_playwright.js` 脚本打开真实浏览器进行搜索
 - 爬取流程：
@@ -64,10 +64,37 @@
   5. 去重、过滤、保存到文件
 - **请求间隔**：默认 **1000ms**（平衡速度和礼貌爬取）
 - 数据存储：搜索结果保存到 `cache/search_{keyword}.json`
-- 分类判断：通过元素的 `cate-*` 类名来判断漫画分类
-- 漫画选择器：`div.pic_box`
+- 漫画卡片选择器：`li.gallary_item`
+- 分类容器：`div.pic_box`（`cate-*` 类名在此元素上）
 - 链接格式：`a[href*="photos-index"]`，aid 格式：`aid-{数字}`
 - 标题处理：需要去除 `<em>` 标签
+- 图片数量：从 `div.info_col` 提取（匹配 `(\d+)張圖片`）
+- 创建时间：从 `div.info_col` 提取（匹配 `創建於(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})`）
+- 分类映射表：
+
+| 类名 | 分类名称 |
+|------|----------|
+| cate-1 | 同人誌／漢化 |
+| cate-2 | 同人誌／CG畫集 |
+| cate-3 | 寫真 & Cosplay |
+| cate-5 | 同人誌 |
+| cate-6 | 單行本 |
+| cate-7 | 雜誌&短篇 |
+| cate-9 | 單行本／漢化 |
+| cate-10 | 雜誌&短篇／漢化 |
+| cate-12 | 同人誌／日語 |
+| cate-13 | 單行本／日語 |
+| cate-14 | 雜誌&短篇／日語 |
+| cate-16 | 同人誌／English |
+| cate-17 | 單行本／English |
+| cate-18 | 雜誌&短篇／English |
+| cate-19 | 韓漫 |
+| cate-20 | 韓漫／漢化 |
+| cate-21 | 韓漫／生肉 |
+| cate-22 | 3D&漫畫 |
+| cate-23 | 3D&漫畫／漢化 |
+| cate-24 | 3D&漫畫／其他 |
+| cate-37 | AI&圖集 |
 
 ### 下载规则
 - 自动对比本地已有漫画，避免重复下载

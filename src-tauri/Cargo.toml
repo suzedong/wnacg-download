@@ -34,17 +34,11 @@ scraper = "0.18"
 thiserror = "1"
 anyhow = "1"
 
-# 目录操作
-dirs = "5"
-
 # 时间处理
 chrono = { version = "0.4", features = ["serde"] }
 
 # UUID
 uuid = { version = "1", features = ["v4", "serde"] }
-
-# 打开浏览器
-open = "5"
 
 [features]
 default = ["custom-protocol"]

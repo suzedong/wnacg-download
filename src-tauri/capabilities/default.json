@@ -13,6 +13,22 @@
     "notification:allow-request-permission",
     "notification:allow-notify",
     "notification:allow-check-permissions",
-    "notification:allow-show"
+    "notification:allow-show",
+    {
+      "identifier": "fs:allow-read-dir",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-read-text-file",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-remove",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "$APPDATA/**" }]
+    },
+    {
+      "identifier": "fs:allow-stat",
+      "allow": [{ "path": "$RESOURCE/**" }, { "path": "$APPDATA/**" }]
+    }
   ]
 }
