@@ -55,6 +55,16 @@
 
     <div v-if="error" class="error-message">
       <p>{{ error }}</p>
+      <div v-if="error.includes('SMB')" class="smb-help">
+        <p><strong>macOS SMB 网络路径使用说明：</strong></p>
+        <ol>
+          <li>打开 Finder</li>
+          <li>按 <kbd>Cmd + K</kbd>（或点击「前往」→「连接服务器」）</li>
+          <li>输入 <code>smb://192.168.21.100/Comic</code></li>
+          <li>连接成功后，共享会挂载到 <code>/Volumes/Comic/</code></li>
+          <li>重新选择 <code>/Volumes/Comic/Type-90</code> 路径</li>
+        </ol>
+      </div>
       <button class="btn-primary" @click="handleRetry">
         🔄 重试
       </button>
@@ -564,21 +574,59 @@ h3 {
   color: #f56c6c;
   border-radius: 8px;
   margin-bottom: 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
 }
 
-.error-message p {
-  margin: 0;
-  flex: 1;
+.error-message > p {
+  margin: 0 0 12px 0;
 }
 
 .error-message .btn-primary {
   padding: 8px 16px;
   font-size: 13px;
   white-space: nowrap;
+}
+
+.smb-help {
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.smb-help p {
+  margin: 0 0 8px 0;
+  color: #303133;
+  font-size: 13px;
+}
+
+.smb-help ol {
+  margin: 0;
+  padding-left: 20px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.smb-help li {
+  margin-bottom: 4px;
+}
+
+.smb-help kbd {
+  background: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.smb-help code {
+  background: #f5f7fa;
+  border: 1px solid #dcdfe6;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 12px;
+  font-family: monospace;
+  color: #667eea;
 }
 
 .results-section {

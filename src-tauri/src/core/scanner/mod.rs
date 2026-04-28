@@ -3,7 +3,6 @@
 use crate::error::AppError;
 use crate::types::comic::LocalComic;
 use chrono::Local;
-use regex::Regex;
 use std::fs;
 use std::path::Path;
 
@@ -16,7 +15,17 @@ impl Scanner {
         println!("📂 开始扫描本地文件夹：{}", path);
 
         // 处理 SMB 路径格式
-        let normalized_path = if path.starts_with("\\\\") || path.starts_with("//") {
+        let normalized_path = if path.starts_with("smb://") {
+            // macOS SMB 路径转换：smb://server/share -> /Volumes/share
+            // 注意：需要先手动挂载 SMB 共享
+            println!("⚠️ 检测到 SMB 路径，macOS 需要先挂载 SMB 共享");
+            println!("   提示：请在 Finder 中连接服务器，或使用 /Volumes/ 路径");
+            return Err(AppError::ConfigError(format!(
+                "SMB 路径需要先挂载：{}\n请在 Finder 中点击「前往」→「连接服务器」，挂载后使用 /Volumes/ 路径",
+                path
+            )));
+        } else if path.starts_with("\\\\") || path.starts_with("//") {
+            // Windows UNC 路径或 Unix 风格
             path.replace("//", "\\")
         } else {
             path.to_string()

@@ -34,7 +34,14 @@ export function useCompare() {
 
       result.value = compareResult;
     } catch (e: any) {
-      error.value = e.message || '对比失败';
+      // Tauri 返回的错误可能是字符串或对象
+      if (typeof e === 'string') {
+        error.value = e;
+      } else if (e && e.message) {
+        error.value = e.message;
+      } else {
+        error.value = String(e);
+      }
       console.error('对比失败：', e);
     } finally {
       isComparing.value = false;
