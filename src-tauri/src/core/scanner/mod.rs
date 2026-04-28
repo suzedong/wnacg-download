@@ -107,7 +107,7 @@ impl Scanner {
         })
     }
 
-    /// 清理标题中的 HTML 实体和特殊字符
+    /// 清理标题中的 HTML 实体（不删除前缀）
     fn clean_title(title: &str) -> String {
         let cleaned = title
             .replace("&nbsp;", " ")
@@ -118,12 +118,8 @@ impl Scanner {
             .replace("&#39;", "'")
             .replace("&#x27;", "'");
         
-        // 清理漫画名前缀：去除 [], (), ()[], []() 等前缀
-        let re = Regex::new(r"^(?:\[.*?\]|\(.*?\)|\[.*?\]\(.*?\)|\(.*?\)\[.*?\])*\s*").unwrap();
-        let trimmed = re.replace(&cleaned, "").trim().to_string();
-        
-        // 去除多余空格
-        trimmed.replace('\u{00a0}', " ").split_whitespace().collect::<Vec<_>>().join(" ")
+        // 只去除多余空格，保留前缀
+        cleaned.replace('\u{00a0}', " ").split_whitespace().collect::<Vec<_>>().join(" ")
     }
 
     /// 提取漫画信息（文件夹）

@@ -122,6 +122,7 @@
               <span v-if="detail.website.category" class="category-badge">{{ detail.website.category }}</span>
             </div>
             <h4>{{ detail.website.title }}</h4>
+            <p class="cleaned-names" v-if="detail.algorithm === '本地'">{{ cleanTitle(detail.website.title) }}</p>
             <div class="comic-info">
               <span class="comic-pages" v-if="detail.website.pages > 0">{{ detail.website.pages }} 张</span>
               <span class="comic-date" v-if="detail.website.upload_date">{{ detail.website.upload_date }}</span>
@@ -130,6 +131,12 @@
               <span class="confidence">匹配度: {{ (detail.confidence * 100).toFixed(0) }}%</span>
               <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
+            <p class="local-title" v-if="detail.local">
+              本地: {{ detail.local.title }}
+            </p>
+            <p class="cleaned-names" v-if="detail.local && detail.algorithm === '本地'">
+              清理后: {{ cleanTitle(detail.local.title) }}
+            </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
         </div>
@@ -148,6 +155,7 @@
               <span v-if="detail.website.category" class="category-badge">{{ detail.website.category }}</span>
             </div>
             <h4>{{ detail.website.title }}</h4>
+            <p class="cleaned-names" v-if="detail.algorithm === '本地'">清理后：{{ cleanTitle(detail.website.title) }}</p>
             <div class="comic-info">
               <span class="comic-pages" v-if="detail.website.pages > 0">{{ detail.website.pages }} 张</span>
               <span class="comic-date" v-if="detail.website.upload_date">{{ detail.website.upload_date }}</span>
@@ -156,7 +164,13 @@
               <span class="confidence">匹配度: {{ (detail.confidence * 100).toFixed(0) }}%</span>
               <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
-            <p class="matched-local" v-if="detail.local">匹配: {{ detail.local.title }}</p>
+            <p class="local-title" v-if="detail.local">
+              本地: {{ detail.local.title }}
+            </p>
+            <p class="cleaned-names" v-if="detail.local && detail.algorithm === '本地'">
+              清理后: {{ cleanTitle(detail.local.title) }}
+            </p>
+            <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
         </div>
       </div>
@@ -171,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useCompare } from '../composables/useCompare';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
 import { CompareResult, MatchDetail, DownloadTask } from '../types/index';
@@ -179,13 +193,42 @@ import { readDir, readTextFile } from '@tauri-apps/plugin-fs';
 import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
-const { isComparing, progress, total, result, error, compare } = useCompare();
+const { isComparing, progress, total, result, error, compare, cleanup } = useCompare();
 const { addToQueue } = useDownloadQueue();
 
 const searchFile = ref('');
 const localPath = ref('');
 const selectedForDownload = ref<string[]>([]);
 const cacheFiles = ref<Array<{ path: string; label: string }>>([]);
+
+let isComponentMounted = true;
+
+// 从 localStorage 加载上次选择的本地路径
+onMounted(() => {
+  const savedLocalPath = localStorage.getItem('compare-local-path');
+  if (savedLocalPath) {
+    localPath.value = savedLocalPath;
+  }
+  loadCacheFiles();
+});
+
+onUnmounted(() => {
+  isComponentMounted = false;
+  cleanup(); // 清理事件监听和状态
+});
+
+// 保存本地路径到 localStorage
+function saveLocalPath() {
+  if (localPath.value) {
+    localStorage.setItem('compare-local-path', localPath.value);
+  }
+}
+
+// 清理漫画名前缀：去除 [], (), ()[], []() 等前缀
+function cleanTitle(title: string): string {
+  const re = /^(?:\[.*?\]|\(.*?\)|\[.*?\]\(.*?\)|\(.*?\)\[.*?\])*\s*/g;
+  return title.replace(re, '').trim();
+}
 
 const compareResult = computed(() => result.value as CompareResult | null);
 
@@ -263,7 +306,9 @@ async function loadCacheFiles() {
             }
           }
           
-          cacheFiles.value = file_list;
+          if (isComponentMounted) {
+            cacheFiles.value = file_list;
+          }
           return;
         } catch (e) {
           continue;
@@ -271,7 +316,9 @@ async function loadCacheFiles() {
       }
     }
   } catch (e: any) {
-    error.value = `加载缓存文件失败：${e.message}`;
+    if (isComponentMounted) {
+      error.value = `加载缓存文件失败：${e.message}`;
+    }
   }
 }
 
@@ -283,19 +330,23 @@ async function browseLocalPath() {
         multiple: false,
         directory: true
       });
-      if (result) {
+      if (result && isComponentMounted) {
         localPath.value = result as string;
+        saveLocalPath(); // 保存选择的本地路径
       }
     } else {
       console.log('非 Tauri 环境，跳过文件夹选择');
     }
   } catch (e: any) {
-    error.value = `选择文件夹失败：${e.message}`;
+    if (isComponentMounted) {
+      error.value = `选择文件夹失败：${e.message}`;
+    }
   }
 }
 
 async function handleCompare() {
   if (!searchFile.value || !localPath.value) return;
+  saveLocalPath(); // 保存本地路径
   await compare(searchFile.value, localPath.value);
 }
 
@@ -742,6 +793,24 @@ h3 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.local-title {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  margin-bottom: 0;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.cleaned-names {
+  font-size: 11px;
+  color: var(--primary);
+  display: block;
+  margin-top: 2px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .actions {

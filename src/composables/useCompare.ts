@@ -10,6 +10,8 @@ export function useCompare() {
   const total = ref(0);
   const result = ref<any>(null);
   const error = ref('');
+  
+  let unlisten: (() => void) | null = null;
 
   async function compare(searchFile: string, localPath: string) {
     isComparing.value = true;
@@ -18,7 +20,7 @@ export function useCompare() {
 
     try {
       // 监听对比进度
-      const unlisten = await listen('compare_progress', (event: any) => {
+      unlisten = await listen('compare_progress', (event: any) => {
         const { current, total: t } = event.payload;
         progress.value = current;
         total.value = t;
@@ -31,14 +33,24 @@ export function useCompare() {
       });
 
       result.value = compareResult;
-
-      await unlisten();
     } catch (e: any) {
       error.value = e.message || '对比失败';
       console.error('对比失败：', e);
     } finally {
       isComparing.value = false;
     }
+  }
+  
+  function cleanup() {
+    if (unlisten) {
+      unlisten();
+      unlisten = null;
+    }
+    isComparing.value = false;
+    progress.value = 0;
+    total.value = 0;
+    result.value = null;
+    error.value = '';
   }
 
   return {
@@ -48,5 +60,6 @@ export function useCompare() {
     result,
     error,
     compare,
+    cleanup,
   };
 }
