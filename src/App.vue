@@ -40,7 +40,7 @@ function handleViewChange(viewId) {
   --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   /* 暗色主题 */
   --bg-primary: #1a1a2e;
   --bg-sidebar: #16213e;
@@ -57,8 +57,9 @@ function handleViewChange(viewId) {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
 }

@@ -10,7 +10,7 @@ export function useCompare() {
   const total = ref(0);
   const result = ref<any>(null);
   const error = ref('');
-  
+
   let unlisten: (() => void) | null = null;
 
   async function compare(searchFile: string, localPath: string) {
@@ -47,7 +47,7 @@ export function useCompare() {
       isComparing.value = false;
     }
   }
-  
+
   function cleanup() {
     if (unlisten) {
       unlisten();

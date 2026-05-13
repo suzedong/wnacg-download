@@ -12,13 +12,15 @@
       <button :disabled="isSearching" @click="handleSearch">
         {{ isSearching ? '搜索中...' : '搜索' }}
       </button>
-      <button class="btn-history" @click="toggleHistoryModal">
-        📋 历史
-      </button>
+      <button class="btn-history" @click="toggleHistoryModal">📋 历史</button>
     </div>
 
     <!-- 搜索历史模态框 -->
-    <div v-if="showHistoryModal" class="modal-overlay" @click="closeHistoryModal">
+    <div
+      v-if="showHistoryModal"
+      class="modal-overlay"
+      @click="closeHistoryModal"
+    >
       <div class="modal-content" @click.stop>
         <div class="modal-header">
           <h3>搜索历史</h3>
@@ -38,7 +40,10 @@
               <span class="history-keyword">{{ item.keyword }}</span>
               <span class="history-count">{{ item.count }} 部漫画</span>
               <span class="history-time">{{ item.time }}</span>
-              <button class="btn-delete" @click.stop="showDeleteConfirm(item.filePath)">
+              <button
+                class="btn-delete"
+                @click.stop="showDeleteConfirm(item.filePath)"
+              >
                 删除
               </button>
             </div>
@@ -48,13 +53,19 @@
     </div>
 
     <!-- 删除确认模态框 -->
-    <div v-if="showDeleteConfirmModal" class="modal-overlay" @click="cancelDelete">
+    <div
+      v-if="showDeleteConfirmModal"
+      class="modal-overlay"
+      @click="cancelDelete"
+    >
       <div class="confirm-dialog" @click.stop>
         <h3>确认删除</h3>
         <p>确定要删除这条搜索历史吗？</p>
         <div class="confirm-actions">
           <button class="btn-cancel" @click="cancelDelete">取消</button>
-          <button class="btn-confirm-delete" @click="executeDelete">确定</button>
+          <button class="btn-confirm-delete" @click="executeDelete">
+            确定
+          </button>
         </div>
       </div>
     </div>
@@ -66,9 +77,7 @@
           :style="{ width: `${total > 0 ? (progress / total) * 100 : 0}%` }"
         ></div>
       </div>
-      <div class="progress-text">
-        搜索进度：{{ progress }}/{{ total }}
-      </div>
+      <div class="progress-text">搜索进度：{{ progress }}/{{ total }}</div>
     </div>
 
     <div v-if="error" class="error">
@@ -80,12 +89,8 @@
       <div class="search-info">
         <span class="search-keyword">{{ currentSearch.keyword }}</span>
         <span class="search-time">{{ currentSearch.time }}</span>
-        <button class="btn-sm" @click="handleSearch">
-          🔄 重新搜索
-        </button>
-        <button class="btn-sm btn-danger" @click="clearSearch">
-          🗑 清空
-        </button>
+        <button class="btn-sm" @click="handleSearch">🔄 重新搜索</button>
+        <button class="btn-sm btn-danger" @click="clearSearch">🗑 清空</button>
       </div>
     </div>
 
@@ -94,7 +99,11 @@
         <p>搜索结果：{{ results.length }} 部漫画</p>
         <div class="results-actions">
           <label class="select-all">
-            <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" />
+            <input
+              type="checkbox"
+              v-model="selectAll"
+              @change="toggleSelectAll"
+            />
             全选
           </label>
           <button
@@ -117,12 +126,18 @@
           </div>
           <div class="comic-cover-wrapper" @click="previewComic(comic.url)">
             <img :src="comic.cover_url" :alt="comic.title" />
-            <span v-if="comic.category" class="category-badge">{{ comic.category }}</span>
+            <span v-if="comic.category" class="category-badge">
+              {{ comic.category }}
+            </span>
           </div>
           <h4>{{ comic.title }}</h4>
           <div class="comic-info">
-            <span v-if="comic.pages > 0" class="comic-pages">{{ comic.pages }} 张</span>
-            <span v-if="comic.upload_date" class="comic-date">{{ comic.upload_date }}</span>
+            <span v-if="comic.pages > 0" class="comic-pages">
+              {{ comic.pages }} 张
+            </span>
+            <span v-if="comic.upload_date" class="comic-date">
+              {{ comic.upload_date }}
+            </span>
           </div>
         </div>
       </div>
@@ -148,14 +163,7 @@ const showHistoryModal = ref(false);
 const showDeleteConfirmModal = ref(false);
 const deleteTargetPath = ref('');
 
-const {
-  results,
-  isSearching,
-  progress,
-  total,
-  error,
-  search,
-} = useSearch();
+const { results, isSearching, progress, total, error, search } = useSearch();
 
 const { addToQueue } = useDownloadQueue();
 
@@ -165,14 +173,14 @@ async function loadSearchHistory() {
     // 检查是否在 Tauri 环境中
     if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
       console.log('开始加载搜索历史...');
-      
+
       const resourceDirPath = await resourceDir();
       const possibleCacheDirs = [
         'cache',
         'src-tauri/target/debug/cache',
-        'target/debug/cache'
+        'target/debug/cache',
       ];
-      
+
       let cacheDir = null;
       for (const dir of possibleCacheDirs) {
         try {
@@ -187,12 +195,15 @@ async function loadSearchHistory() {
           console.log(`目录不存在：${dir}`, e);
         }
       }
-      
+
       if (cacheDir) {
         console.log(`使用缓存目录：${cacheDir}`);
         const files = await readDir(cacheDir);
-        console.log(`缓存目录中的文件：`, files.map(f => f.name));
-        
+        console.log(
+          `缓存目录中的文件：`,
+          files.map((f) => f.name)
+        );
+
         const history = [];
 
         for (const file of files) {
@@ -202,20 +213,24 @@ async function loadSearchHistory() {
               const filePath = await join(cacheDir, file.name);
               const content = await readTextFile(filePath);
               const comics = JSON.parse(content);
-              
+
               // 提取关键字
               const keywordMatch = file.name.match(/search_(.+?)\.json/);
-              const keyword = keywordMatch ? keywordMatch[1].replace(/_/g, ' ') : '未知';
-              
+              const keyword = keywordMatch
+                ? keywordMatch[1].replace(/_/g, ' ')
+                : '未知';
+
               const fileInfo = await stat(filePath);
-              const timeStr = fileInfo.mtime ? fileInfo.mtime.toLocaleString() : '未知时间';
-              
+              const timeStr = fileInfo.mtime
+                ? fileInfo.mtime.toLocaleString()
+                : '未知时间';
+
               history.push({
                 fileName: file.name,
                 filePath,
                 keyword,
                 count: comics.length,
-                time: timeStr
+                time: timeStr,
               });
               console.log(`添加搜索历史：${keyword} (${comics.length} 部漫画)`);
             } catch (e) {
@@ -225,7 +240,9 @@ async function loadSearchHistory() {
         }
 
         // 按时间倒序排序
-        searchHistory.value = history.sort((a, b) => b.time.localeCompare(a.time));
+        searchHistory.value = history.sort((a, b) =>
+          b.time.localeCompare(a.time)
+        );
         console.log(`搜索历史加载完成，共 ${history.length} 条记录`);
       } else {
         console.log('未找到缓存目录');
@@ -246,15 +263,17 @@ async function loadSearchHistoryItem(filePath: string) {
       const content = await readTextFile(filePath);
       const comics = JSON.parse(content);
       results.value = comics;
-      
+
       // 提取关键字
       const fileName = filePath.split('/').pop() || '';
       const keywordMatch = fileName.match(/search_(.+?)\.json/);
-      const keyword = keywordMatch ? keywordMatch[1].replace(/_/g, ' ') : '未知';
-      
+      const keyword = keywordMatch
+        ? keywordMatch[1].replace(/_/g, ' ')
+        : '未知';
+
       currentSearch.value = {
         keyword,
-        time: new Date().toLocaleString()
+        time: new Date().toLocaleString(),
       };
     } else {
       console.log('非 Tauri 环境，跳过加载历史搜索结果');
@@ -349,13 +368,13 @@ async function handleSearch() {
   selectedComics.value = [];
   selectAll.value = false;
   await search(keyword.value, options);
-  
+
   // 更新当前搜索信息
   currentSearch.value = {
     keyword: keyword.value,
-    time: new Date().toLocaleString()
+    time: new Date().toLocaleString(),
   };
-  
+
   // 重新加载历史
   await loadSearchHistory();
 }
@@ -829,7 +848,7 @@ h3 {
   cursor: pointer;
 }
 
-.select-all input[type="checkbox"] {
+.select-all input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -883,7 +902,7 @@ h3 {
   z-index: 1;
 }
 
-.card-checkbox input[type="checkbox"] {
+.card-checkbox input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;

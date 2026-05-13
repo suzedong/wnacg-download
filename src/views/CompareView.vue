@@ -9,7 +9,11 @@
           <div class="input-group">
             <select v-model="searchFile" class="select-input">
               <option value="" disabled>请选择搜索缓存文件</option>
-              <option v-for="file in cacheFiles" :key="file.path" :value="file.path">
+              <option
+                v-for="file in cacheFiles"
+                :key="file.path"
+                :value="file.path"
+              >
                 {{ file.label }}
               </option>
             </select>
@@ -59,15 +63,27 @@
         <p><strong>macOS SMB 网络路径使用说明：</strong></p>
         <ol>
           <li>打开 Finder</li>
-          <li>按 <kbd>Cmd + K</kbd>（或点击「前往」→「连接服务器」）</li>
-          <li>输入 <code>smb://192.168.21.100/Comic</code></li>
-          <li>连接成功后，共享会挂载到 <code>/Volumes/Comic/</code></li>
-          <li>重新选择 <code>/Volumes/Comic/Type-90</code> 路径</li>
+          <li>
+            按
+            <kbd>Cmd + K</kbd>
+            （或点击「前往」→「连接服务器」）
+          </li>
+          <li>
+            输入
+            <code>smb://192.168.21.100/Comic</code>
+          </li>
+          <li>
+            连接成功后，共享会挂载到
+            <code>/Volumes/Comic/</code>
+          </li>
+          <li>
+            重新选择
+            <code>/Volumes/Comic/Type-90</code>
+            路径
+          </li>
         </ol>
       </div>
-      <button class="btn-primary" @click="handleRetry">
-        🔄 重试
-      </button>
+      <button class="btn-primary" @click="handleRetry">🔄 重试</button>
     </div>
 
     <div v-if="compareResult" class="results-section">
@@ -95,15 +111,15 @@
           <h3>📥 需要下载的漫画 ({{ needDownload.length }})</h3>
           <div class="header-actions">
             <label class="select-all-label">
-              <input 
-                type="checkbox" 
-                :checked="isAllSelected" 
-                @change="toggleSelectAll" 
+              <input
+                type="checkbox"
+                :checked="isAllSelected"
+                @change="toggleSelectAll"
               />
               全选
             </label>
-            <button 
-              class="btn-primary" 
+            <button
+              class="btn-primary"
               :disabled="selectedForDownload.length === 0"
               @click="addSelectedToDownload"
             >
@@ -121,30 +137,46 @@
             class="comic-card"
           >
             <div class="card-checkbox">
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 :checked="selectedForDownload.includes(detail.website.aid)"
-                @change="toggleSelect(detail.website.aid)" 
+                @change="toggleSelect(detail.website.aid)"
               />
             </div>
             <div class="comic-cover-wrapper">
-              <img :src="detail.website.cover_url" :alt="detail.website.title" />
-              <span v-if="detail.website.category" class="category-badge">{{ detail.website.category }}</span>
+              <img
+                :src="detail.website.cover_url"
+                :alt="detail.website.title"
+              />
+              <span v-if="detail.website.category" class="category-badge">
+                {{ detail.website.category }}
+              </span>
             </div>
-            <h4>{{ detail.website.title }}</h4>
-            <p class="cleaned-names" v-if="detail.algorithm === '本地'">{{ cleanTitle(detail.website.title) }}</p>
+            <h4>{{ cleanHtmlEntities(detail.website.title) }}</h4>
+            <p class="cleaned-names" v-if="detail.algorithm === '本地'">
+              清理后: {{ cleanTitle(detail.website.title) }}
+            </p>
             <div class="comic-info">
-              <span class="comic-pages" v-if="detail.website.pages > 0">{{ detail.website.pages }} 张</span>
-              <span class="comic-date" v-if="detail.website.upload_date">{{ detail.website.upload_date }}</span>
+              <span class="comic-pages" v-if="detail.website.pages > 0">
+                {{ detail.website.pages }} 张
+              </span>
+              <span class="comic-date" v-if="detail.website.upload_date">
+                {{ detail.website.upload_date }}
+              </span>
             </div>
             <div class="match-info">
-              <span class="confidence">匹配度: {{ (detail.confidence * 100).toFixed(0) }}%</span>
+              <span class="confidence">
+                匹配度: {{ (detail.confidence * 100).toFixed(0) }}%
+              </span>
               <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
             <p class="local-title" v-if="detail.local">
               本地: {{ detail.local.title }}
             </p>
-            <p class="cleaned-names" v-if="detail.local && detail.algorithm === '本地'">
+            <p
+              class="cleaned-names"
+              v-if="detail.local && detail.algorithm === '本地'"
+            >
               清理后: {{ cleanTitle(detail.local.title) }}
             </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
@@ -161,23 +193,39 @@
             class="comic-card owned"
           >
             <div class="comic-cover-wrapper">
-              <img :src="detail.website.cover_url" :alt="detail.website.title" />
-              <span v-if="detail.website.category" class="category-badge">{{ detail.website.category }}</span>
+              <img
+                :src="detail.website.cover_url"
+                :alt="detail.website.title"
+              />
+              <span v-if="detail.website.category" class="category-badge">
+                {{ detail.website.category }}
+              </span>
             </div>
-            <h4>{{ detail.website.title }}</h4>
-            <p class="cleaned-names" v-if="detail.algorithm === '本地'">清理后：{{ cleanTitle(detail.website.title) }}</p>
+            <h4>{{ cleanHtmlEntities(detail.website.title) }}</h4>
+            <p class="cleaned-names" v-if="detail.algorithm === '本地'">
+              清理后: {{ cleanTitle(detail.website.title) }}
+            </p>
             <div class="comic-info">
-              <span class="comic-pages" v-if="detail.website.pages > 0">{{ detail.website.pages }} 张</span>
-              <span class="comic-date" v-if="detail.website.upload_date">{{ detail.website.upload_date }}</span>
+              <span class="comic-pages" v-if="detail.website.pages > 0">
+                {{ detail.website.pages }} 张
+              </span>
+              <span class="comic-date" v-if="detail.website.upload_date">
+                {{ detail.website.upload_date }}
+              </span>
             </div>
             <div class="match-info">
-              <span class="confidence">匹配度: {{ (detail.confidence * 100).toFixed(0) }}%</span>
+              <span class="confidence">
+                匹配度: {{ (detail.confidence * 100).toFixed(0) }}%
+              </span>
               <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
             <p class="local-title" v-if="detail.local">
               本地: {{ detail.local.title }}
             </p>
-            <p class="cleaned-names" v-if="detail.local && detail.algorithm === '本地'">
+            <p
+              class="cleaned-names"
+              v-if="detail.local && detail.algorithm === '本地'"
+            >
               清理后: {{ cleanTitle(detail.local.title) }}
             </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
@@ -187,9 +235,7 @@
     </div>
 
     <div v-if="compareResult" class="actions">
-      <button class="btn-secondary" @click="resetCompare">
-        🔄 重新对比
-      </button>
+      <button class="btn-secondary" @click="resetCompare">🔄 重新对比</button>
     </div>
   </div>
 </template>
@@ -203,7 +249,8 @@ import { readDir, readTextFile } from '@tauri-apps/plugin-fs';
 import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
-const { isComparing, progress, total, result, error, compare, cleanup } = useCompare();
+const { isComparing, progress, total, result, error, compare, cleanup } =
+  useCompare();
 const { addToQueue } = useDownloadQueue();
 
 const searchFile = ref('');
@@ -234,10 +281,27 @@ function saveLocalPath() {
   }
 }
 
-// 清理漫画名前缀：去除 [], (), ()[], []() 等前缀
+// 清理 HTML 实体和多余空格（保留前缀）
+function cleanHtmlEntities(title: string): string {
+  let cleaned = title
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x27;/g, "'")
+    .replace(/<\/?em>/gi, '');
+
+  return cleaned.replace(/\s+/g, ' ').trim();
+}
+
+// 清理漫画名：去除 HTML 实体 + 多余空格 + [], (), ()[], []() 等前缀
 function cleanTitle(title: string): string {
-  const re = /^(?:\[.*?\]|\(.*?\)|\[.*?\]\(.*?\)|\(.*?\)\[.*?\])*\s*/g;
-  return title.replace(re, '').trim();
+  const cleaned = cleanHtmlEntities(title);
+  // 匹配开头的 [], (), 【】, 以及它们的组合（允许括号间有空格）
+  const re = /^(?:\s*(?:\[.*?\]|\(.*?\)|【.*?】))*\s*/g;
+  return cleaned.replace(re, '').trim();
 }
 
 const compareResult = computed(() => result.value as CompareResult | null);
@@ -259,21 +323,25 @@ const alreadyHave = computed(() => {
 });
 
 const selectedNeedDownload = computed(() => {
-  return needDownload.value.filter(
-    (d: MatchDetail) => selectedForDownload.value.includes(d.website.aid)
+  return needDownload.value.filter((d: MatchDetail) =>
+    selectedForDownload.value.includes(d.website.aid)
   );
 });
 
 const isAllSelected = computed(() => {
-  return needDownload.value.length > 0 && 
-         selectedForDownload.value.length === needDownload.value.length;
+  return (
+    needDownload.value.length > 0 &&
+    selectedForDownload.value.length === needDownload.value.length
+  );
 });
 
 function toggleSelectAll() {
   if (isAllSelected.value) {
     selectedForDownload.value = [];
   } else {
-    selectedForDownload.value = needDownload.value.map((d: MatchDetail) => d.website.aid);
+    selectedForDownload.value = needDownload.value.map(
+      (d: MatchDetail) => d.website.aid
+    );
   }
 }
 
@@ -284,38 +352,43 @@ async function loadCacheFiles() {
       const possibleCacheDirs = [
         'cache',
         'src-tauri/target/debug/cache',
-        'target/debug/cache'
+        'target/debug/cache',
       ];
-      
+
       for (const dir of possibleCacheDirs) {
         try {
           const cacheDir = await join(resourceDirPath, dir);
           const files = await readDir(cacheDir);
-          
+
           const file_list: Array<{ path: string; label: string }> = [];
-          
+
           for (const file of files) {
-            if (file.name.endsWith('.json') && file.name.startsWith('search_')) {
+            if (
+              file.name.endsWith('.json') &&
+              file.name.startsWith('search_')
+            ) {
               const filePath = await join(cacheDir, file.name);
               const keywordMatch = file.name.match(/search_(.+?)\.json/);
-              const keyword = keywordMatch ? keywordMatch[1].replace(/_/g, ' ') : '未知';
-              
+              const keyword = keywordMatch
+                ? keywordMatch[1].replace(/_/g, ' ')
+                : '未知';
+
               try {
                 const content = await readTextFile(filePath);
                 const comics = JSON.parse(content);
                 const count = comics.length;
                 const timeStr = new Date().toLocaleString();
-                
+
                 file_list.push({
                   path: filePath,
-                  label: `${keyword} (${count} 部)`
+                  label: `${keyword} (${count} 部)`,
                 });
               } catch (e) {
                 console.error('读取缓存文件失败：', e);
               }
             }
           }
-          
+
           if (isComponentMounted) {
             cacheFiles.value = file_list;
           }
@@ -338,7 +411,7 @@ async function browseLocalPath() {
     if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
       const result = await open({
         multiple: false,
-        directory: true
+        directory: true,
       });
       if (result && isComponentMounted) {
         localPath.value = result as string;
@@ -376,13 +449,13 @@ function addSelectedToDownload() {
       title: d.website.title,
       url: d.website.url,
       cover_url: d.website.cover_url,
-      save_path: localPath.value
+      save_path: localPath.value,
     } as DownloadTask;
   });
-  
+
   const addedCount = addToQueue(toDownload);
   console.log(`添加了 ${addedCount} 个任务到下载队列`);
-  
+
   if (addedCount > 0) {
     alert(`已添加 ${addedCount} 个漫画到下载队列`);
   }
@@ -395,13 +468,13 @@ function addAllToDownload() {
       title: d.website.title,
       url: d.website.url,
       cover_url: d.website.cover_url,
-      save_path: localPath.value
+      save_path: localPath.value,
     } as DownloadTask;
   });
-  
+
   const addedCount = addToQueue(toDownload);
   console.log(`添加了 ${addedCount} 个任务到下载队列`);
-  
+
   if (addedCount > 0) {
     alert(`已添加 ${addedCount} 个漫画到下载队列`);
   }
@@ -694,7 +767,7 @@ h3 {
   cursor: pointer;
 }
 
-.select-all-label input[type="checkbox"] {
+.select-all-label input[type='checkbox'] {
   width: 16px;
   height: 16px;
   cursor: pointer;
@@ -730,7 +803,7 @@ h3 {
   z-index: 2;
 }
 
-.card-checkbox input[type="checkbox"] {
+.card-checkbox input[type='checkbox'] {
   width: 18px;
   height: 18px;
   cursor: pointer;

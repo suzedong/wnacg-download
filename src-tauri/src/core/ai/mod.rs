@@ -441,10 +441,9 @@ impl AiMatcher {
         matrix[len1][len2]
     }
 
-    /// 清理漫画名前缀：去除 [], (), ()[], []() 等前缀
+    /// 清理漫画名前缀：去除 [], (), 【】, 以及它们的组合
     fn clean_title_prefix(title: &str) -> String {
-        // 正则表达式匹配开头的 [], (), 以及它们的组合
-        let re = Regex::new(r"^(?:\[.*?\]|\(.*?\)|\[.*?\]\(.*?\)|\(.*?\)\[.*?\])*\s*").unwrap();
+        let re = Regex::new(r"^(?:\s*(?:\[.*?\]|\(.*?\)|【.*?】))*\s*").unwrap();
         re.replace(title, "").trim().to_string()
     }
 }

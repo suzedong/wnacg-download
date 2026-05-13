@@ -2,16 +2,25 @@
   <div class="download-view">
     <h2>⬇️ 下载队列</h2>
 
-    <div v-if="downloadQueue.length === 0 && !downloadResult" class="empty-state">
+    <div
+      v-if="downloadQueue.length === 0 && !downloadResult"
+      class="empty-state"
+    >
       <p>暂无下载任务</p>
       <p class="hint">从搜索页面选择漫画并添加到下载队列</p>
     </div>
 
     <div v-if="downloadQueue.length > 0" class="queue-section">
       <div class="queue-header">
-        <span class="queue-count">下载队列 ({{ downloadQueue.length }} 部漫画)</span>
+        <span class="queue-count">
+          下载队列 ({{ downloadQueue.length }} 部漫画)
+        </span>
         <div class="queue-actions">
-          <button class="btn-secondary" @click="clearQueue" :disabled="isDownloading">
+          <button
+            class="btn-secondary"
+            @click="clearQueue"
+            :disabled="isDownloading"
+          >
             🗑 清空
           </button>
           <button
@@ -126,7 +135,14 @@ import { DownloadResult, DownloadTask } from '../types/index';
 import { resolve } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-shell';
 
-const { isDownloading, progress, speed, error, result, startDownload: download } = useDownload();
+const {
+  isDownloading,
+  progress,
+  speed,
+  error,
+  result,
+  startDownload: download,
+} = useDownload();
 const { config, loadConfig } = useConfig();
 const { downloadQueue, removeFromQueue, clearQueue } = useDownloadQueue();
 
@@ -168,12 +184,12 @@ async function openDownloadFolder() {
       if (!config.value) {
         await loadConfig();
       }
-      
+
       let downloadPath = config.value?.default_save_path || './downloads';
-      
+
       // 解析路径
       const resolvedPath = await resolve(downloadPath);
-      
+
       // 打开文件夹
       await open(resolvedPath);
     } else {
@@ -185,22 +201,26 @@ async function openDownloadFolder() {
 }
 
 function retryFailed() {
-  if (!downloadResult.value || downloadResult.value.failed_list.length === 0) return;
-  
+  if (!downloadResult.value || downloadResult.value.failed_list.length === 0)
+    return;
+
   // 将失败的任务重新添加到下载队列
-  const failedTasks = downloadResult.value.failed_list.map(failed => ({
-    aid: failed.title, // 使用标题作为 aid（实际应该从原始任务中获取）
-    title: failed.title,
-    url: '', // 这里需要从原始任务中获取，暂时留空
-    cover_url: '',
-    save_path: config.value?.default_save_path || './downloads',
-    pages: 0
-  } as DownloadTask));
-  
+  const failedTasks = downloadResult.value.failed_list.map(
+    (failed) =>
+      ({
+        aid: failed.title, // 使用标题作为 aid（实际应该从原始任务中获取）
+        title: failed.title,
+        url: '', // 这里需要从原始任务中获取，暂时留空
+        cover_url: '',
+        save_path: config.value?.default_save_path || './downloads',
+        pages: 0,
+      }) as DownloadTask
+  );
+
   // 添加到队列
   const { addToQueue } = useDownloadQueue();
   const added = addToQueue(failedTasks);
-  
+
   alert(`已将 ${added} 个失败任务重新添加到下载队列`);
 }
 

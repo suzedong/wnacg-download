@@ -50,7 +50,10 @@ function selectView(viewId) {
 
 async function toggleTheme() {
   isDark.value = !isDark.value;
-  document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light');
+  document.documentElement.setAttribute(
+    'data-theme',
+    isDark.value ? 'dark' : 'light'
+  );
 
   if (config.value) {
     config.value.theme = isDark.value ? 'dark' : 'light';
@@ -62,7 +65,10 @@ onMounted(async () => {
   await loadConfig();
   if (config.value) {
     isDark.value = config.value.theme === 'dark';
-    document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light');
+    document.documentElement.setAttribute(
+      'data-theme',
+      isDark.value ? 'dark' : 'light'
+    );
   }
 });
 </script>

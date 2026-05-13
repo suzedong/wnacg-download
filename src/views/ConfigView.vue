@@ -20,7 +20,11 @@
       </div>
       <div v-if="config.proxy_enabled" class="form-group">
         <label>代理地址：</label>
-        <input v-model="config.proxy" type="text" placeholder="http://127.0.0.1:7890" />
+        <input
+          v-model="config.proxy"
+          type="text"
+          placeholder="http://127.0.0.1:7890"
+        />
       </div>
       <div class="form-group">
         <label>请求间隔（毫秒）：</label>
@@ -30,7 +34,12 @@
       <h3>下载设置</h3>
       <div class="form-group">
         <label>并发下载数：</label>
-        <input v-model.number="config.concurrent_downloads" type="number" min="1" max="10" />
+        <input
+          v-model.number="config.concurrent_downloads"
+          type="number"
+          min="1"
+          max="10"
+        />
       </div>
       <div class="form-group">
         <label>下载重试次数：</label>
@@ -40,11 +49,21 @@
       <h3>AI 设置</h3>
       <div class="form-group">
         <label>AI API 地址：</label>
-        <input v-model="config.ai_api_url" type="text" placeholder="https://api.openai.com/v1/chat/completions" />
+        <input
+          v-model="config.ai_api_url"
+          type="text"
+          placeholder="https://api.openai.com/v1/chat/completions"
+        />
       </div>
       <div class="form-group">
         <label>匹配阈值：</label>
-        <input v-model.number="config.match_threshold" type="number" step="0.1" min="0" max="1" />
+        <input
+          v-model.number="config.match_threshold"
+          type="number"
+          step="0.1"
+          min="0"
+          max="1"
+        />
       </div>
 
       <div class="form-actions">
@@ -112,8 +131,8 @@ h3 {
   font-size: 14px;
 }
 
-.form-group input[type="text"],
-.form-group input[type="number"] {
+.form-group input[type='text'],
+.form-group input[type='number'] {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color);

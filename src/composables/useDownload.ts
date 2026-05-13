@@ -28,16 +28,22 @@ export function useDownload() {
 
     try {
       // 监听下载进度
-      const unlistenProgress = await listen('download_progress', (event: any) => {
-        const { progress: p, speed: s } = event.payload;
-        progress.value = p;
-        speed.value = s;
-      });
+      const unlistenProgress = await listen(
+        'download_progress',
+        (event: any) => {
+          const { progress: p, speed: s } = event.payload;
+          progress.value = p;
+          speed.value = s;
+        }
+      );
 
       // 监听下载完成
-      const unlistenComplete = await listen('download_complete', (event: any) => {
-        console.log('下载完成：', event.payload);
-      });
+      const unlistenComplete = await listen(
+        'download_complete',
+        (event: any) => {
+          console.log('下载完成：', event.payload);
+        }
+      );
 
       // 调用 Tauri Command
       const downloadResult = await invoke('start_download', {
