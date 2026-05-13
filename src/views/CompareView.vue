@@ -154,7 +154,7 @@
             </div>
             <h4>{{ cleanHtmlEntities(detail.website.title) }}</h4>
             <p class="cleaned-names" v-if="detail.algorithm === '本地'">
-              清理后: {{ cleanTitle(detail.website.title) }}
+              清理后: <span v-html="highlightMatch(detail.website.title, detail.local?.title || '').html1"></span>
             </p>
             <div class="comic-info">
               <span class="comic-pages" v-if="detail.website.pages > 0">
@@ -177,7 +177,7 @@
               class="cleaned-names"
               v-if="detail.local && detail.algorithm === '本地'"
             >
-              清理后: {{ cleanTitle(detail.local.title) }}
+              清理后: <span v-html="highlightMatch(detail.website.title, detail.local.title).html2"></span>
             </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
@@ -203,7 +203,7 @@
             </div>
             <h4>{{ cleanHtmlEntities(detail.website.title) }}</h4>
             <p class="cleaned-names" v-if="detail.algorithm === '本地'">
-              清理后: {{ cleanTitle(detail.website.title) }}
+              清理后: <span v-html="highlightMatch(detail.website.title, detail.local?.title || '').html1"></span>
             </p>
             <div class="comic-info">
               <span class="comic-pages" v-if="detail.website.pages > 0">
@@ -226,7 +226,7 @@
               class="cleaned-names"
               v-if="detail.local && detail.algorithm === '本地'"
             >
-              清理后: {{ cleanTitle(detail.local.title) }}
+              清理后: <span v-html="highlightMatch(detail.website.title, detail.local.title).html2"></span>
             </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
@@ -302,6 +302,91 @@ function cleanTitle(title: string): string {
   // 匹配开头的 [], (), 【】, 以及它们的组合（允许括号间有空格）
   const re = /^(?:\s*(?:\[.*?\]|\(.*?\)|【.*?】))*\s*/g;
   return cleaned.replace(re, '').trim();
+}
+
+// 高亮两个字符串中匹配的部分
+function highlightMatch(text1: string, text2: string): { html1: string; html2: string } {
+  const clean1 = cleanTitle(text1);
+  const clean2 = cleanTitle(text2);
+  
+  if (!clean1 || !clean2) {
+    return { html1: escapeHtml(clean1), html2: escapeHtml(clean2) };
+  }
+  
+  // 使用最长公共子序列算法找出匹配部分
+  const lcs = getLongestCommonSubsequence(clean1.toLowerCase(), clean2.toLowerCase());
+  
+  // 高亮 text1 中的匹配字符
+  let html1 = '';
+  let lcsIndex = 0;
+  for (let i = 0; i < clean1.length; i++) {
+    const char = escapeHtml(clean1[i]);
+    if (lcsIndex < lcs.length && clean1[i].toLowerCase() === lcs[lcsIndex]) {
+      html1 += `<span class="match-highlight">${char}</span>`;
+      lcsIndex++;
+    } else {
+      html1 += `<span class="no-match">${char}</span>`;
+    }
+  }
+  
+  // 高亮 text2 中的匹配字符
+  let html2 = '';
+  lcsIndex = 0;
+  for (let i = 0; i < clean2.length; i++) {
+    const char = escapeHtml(clean2[i]);
+    if (lcsIndex < lcs.length && clean2[i].toLowerCase() === lcs[lcsIndex]) {
+      html2 += `<span class="match-highlight">${char}</span>`;
+      lcsIndex++;
+    } else {
+      html2 += `<span class="no-match">${char}</span>`;
+    }
+  }
+  
+  return { html1, html2 };
+}
+
+// 获取最长公共子序列
+function getLongestCommonSubsequence(s1: string, s2: string): string {
+  const m = s1.length;
+  const n = s2.length;
+  
+  // 创建 DP 表
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (s1[i - 1] === s2[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  // 回溯找出 LCS
+  let result = '';
+  let i = m;
+  let j = n;
+  while (i > 0 && j > 0) {
+    if (s1[i - 1] === s2[j - 1]) {
+      result = s1[i - 1] + result;
+      i--;
+      j--;
+    } else if (dp[i - 1][j] > dp[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  
+  return result;
+}
+
+// HTML 转义
+function escapeHtml(text: string): string {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 const compareResult = computed(() => result.value as CompareResult | null);
@@ -932,6 +1017,32 @@ h3 {
   margin-top: 2px;
   word-wrap: break-word;
   overflow-wrap: break-word;
+}
+
+.match-highlight {
+  background: rgba(102, 126, 234, 0.3);
+  color: var(--primary);
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.no-match {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+:deep(.match-highlight) {
+  background: rgba(102, 126, 234, 0.3);
+  color: var(--primary);
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+:deep(.no-match) {
+  color: var(--text-secondary);
+  opacity: 0.6;
 }
 
 .actions {
