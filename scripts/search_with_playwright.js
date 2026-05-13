@@ -131,7 +131,8 @@ async function search(keyword, pageNum = 1) {
                        .replace(/&gt;/g, '>')
                        .replace(/&quot;/g, '"')
                        .replace(/&#39;/g, "'")
-                       .replace(/&#x27;/g, "'");
+                       .replace(/&#x27;/g, "'")
+                       .replace(/&#124;/g, '|');
           // 去除多余空格并trim（保留 [] 和 () 前缀）
           title = title.replace(/\s+/g, ' ').trim();
 

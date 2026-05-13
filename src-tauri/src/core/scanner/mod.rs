@@ -125,7 +125,8 @@ impl Scanner {
             .replace("&gt;", ">")
             .replace("&quot;", "\"")
             .replace("&#39;", "'")
-            .replace("&#x27;", "'");
+            .replace("&#x27;", "'")
+            .replace("&#124;", "|");
         
         // 只去除多余空格，保留前缀
         cleaned.replace('\u{00a0}', " ").split_whitespace().collect::<Vec<_>>().join(" ")

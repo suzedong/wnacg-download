@@ -291,6 +291,7 @@ function cleanHtmlEntities(title: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&#x27;/g, "'")
+    .replace(/&#124;/g, '|')
     .replace(/<\/?em>/gi, '');
 
   return cleaned.replace(/\s+/g, ' ').trim();
