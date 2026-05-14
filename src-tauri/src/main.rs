@@ -93,6 +93,8 @@ fn main() {
             commands::config::get_config,
             commands::config::save_config,
             commands::config::reset_config,
+            commands::config::open_folder,
+            commands::config::open_folder,
             // 搜索命令（Phase 2 实现）
             commands::search::search_comics,
             // 对比命令（Phase 3 实现）

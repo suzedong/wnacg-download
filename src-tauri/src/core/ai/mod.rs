@@ -153,6 +153,7 @@ impl AiMatcher {
             ai_response = ai_result.ai_response;
         } else if self.api_url.is_empty() {
             println!(" AI API 未配置，仅使用本地匹配结果");
+            final_details.extend(unmatched_details);
         } else {
             println!(" 所有漫画均已本地匹配，无需 AI 兜底");
             let _ = crate::events::emit_ai_progress(app, AiProgressEvent {

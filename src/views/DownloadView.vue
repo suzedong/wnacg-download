@@ -134,8 +134,7 @@ import { useDownload } from '../composables/useDownload';
 import { useConfig } from '../composables/useConfig';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
 import { DownloadResult, DownloadTask } from '../types/index';
-import { resolve } from '@tauri-apps/api/path';
-import { open } from '@tauri-apps/plugin-shell';
+import { invoke } from '@tauri-apps/api/core';
 
 const {
   isDownloading,
@@ -151,6 +150,9 @@ const { downloadQueue, removeFromQueue, clearQueue } = useDownloadQueue();
 const taskProgress = ref<Record<string, number>>({});
 const downloadResult = computed(() => result.value as DownloadResult | null);
 
+// 记录下载时使用的存储路径
+const lastSavePath = ref<string>('');
+
 async function startDownload() {
   if (downloadQueue.value.length === 0) return;
 
@@ -159,6 +161,9 @@ async function startDownload() {
     error.value = '配置未加载';
     return;
   }
+
+  // 记录使用的存储路径
+  lastSavePath.value = config.value.storage_path || downloadQueue.value[0]?.save_path || '';
 
   await download(downloadQueue.value, {
     concurrent: config.value.concurrent_downloads,
@@ -182,24 +187,34 @@ function formatSpeed(bytesPerSecond: number): string {
 
 async function openDownloadFolder() {
   try {
-    // 检查是否在 Tauri 环境中
     if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
-      if (!config.value) {
-        await loadConfig();
+      // 优先使用下载时记录的存储路径
+      let downloadPath = lastSavePath.value;
+
+      // 如果为空，尝试从配置获取
+      if (!downloadPath) {
+        if (!config.value) {
+          await loadConfig();
+        }
+        downloadPath = config.value?.storage_path || '';
       }
 
-      let downloadPath = config.value?.storage_path || './downloads';
+      // 最后尝试从队列任务中获取
+      if (!downloadPath && downloadQueue.value.length > 0) {
+        downloadPath = downloadQueue.value[0].save_path;
+      }
 
-      // 解析路径
-      const resolvedPath = await resolve(downloadPath);
+      if (!downloadPath) {
+        error.value = '存储路径未配置，请先在设置中配置保存路径';
+        return;
+      }
 
-      // 打开文件夹
-      await open(resolvedPath);
+      await invoke('open_folder', { path: downloadPath });
     } else {
       console.log('非 Tauri 环境，跳过打开文件夹');
     }
   } catch (e: any) {
-    error.value = `打开文件夹失败：${e.message}`;
+    error.value = `打开文件夹失败：${e.message || e}`;
   }
 }
 

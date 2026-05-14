@@ -263,78 +263,95 @@ impl Downloader {
             .replace("&#124;", "|")
     }
 
-    /// 获取下载地址（双源：Server 1 → Server 2）
+    /// 获取下载地址（双源：Playwright Worker API → Server 2）
     async fn get_download_url(
-        client: &Client,
+        _client: &Client,
         file_key: &str,
         file_name: &str,
         server2_url: &str,
     ) -> Result<String, AppError> {
-        // 尝试 Server 1：Worker API 获取临时链接
-        match Self::get_url_from_worker(client, file_key, file_name).await {
+        // 尝试 1：Playwright 调用 Worker API 获取临时链接（绕过 Cloudflare）
+        match Self::get_url_from_worker_playwright(file_key, file_name).await {
             Ok(url) => {
-                println!("🔗 使用 Server 1 链接");
+                println!("🔗 使用 Worker API 临时链接");
                 return Ok(url);
             }
-            Err(e) => println!("⚠️ Server 1 获取失败：{}，尝试备用线路...", e),
+            Err(e) => println!("⚠️ Worker API 获取失败：{}，尝试备用线路...", e),
         }
 
-        // 回退 Server 2：优先使用 Playwright 提取的直接链接
+        // 尝试 2：优先使用 Playwright 提取的 Server 2 直接下载链接
         if !server2_url.is_empty() {
             let url = if server2_url.starts_with("//") {
                 format!("https:{}", server2_url)
             } else {
                 server2_url.to_string()
             };
-            println!("🔗 使用 Server 2 备用线路（Playwright 提取）");
+            println!("🔗 使用 Server 2 直链（Playwright 提取）");
             return Ok(url);
         }
 
         // 最后回退：拼接直链
         let direct_url = format!("https://dl1.wn01.download/{}", file_key);
-        println!("🔗 使用 Server 2 备用线路（拼接）");
+        println!("🔗 使用拼接直链（备用）");
         Ok(direct_url)
     }
 
-    /// Server 1：通过 Worker API 获取临时下载链接
-    async fn get_url_from_worker(
-        client: &Client,
+    /// 通过 Playwright 调用 Worker API 获取临时下载链接
+    async fn get_url_from_worker_playwright(
         file_key: &str,
         file_name: &str,
     ) -> Result<String, AppError> {
-        let worker_url = "https://d1.wcdn.date/api/generate-link";
+        use tokio::process::Command as TokioCommand;
 
-        let body = serde_json::json!({
-            "file_key": file_key,
-            "file_name": file_name
-        });
-
-        let response = client
-            .post(worker_url)
-            .timeout(Duration::from_secs(30))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| AppError::DownloadError(format!("Worker API 请求失败：{}", e)))?;
-
-        let json_val: serde_json::Value = response
-            .json()
-            .await
-            .map_err(|e| AppError::DownloadError(format!("Worker API 响应解析失败：{}", e)))?;
-
-        if json_val.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
-            json_val
-                .get("url")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-                .ok_or_else(|| AppError::DownloadError("Worker API 未返回有效链接".to_string()))
-        } else {
-            let msg = json_val
-                .get("msg")
-                .and_then(|v| v.as_str())
-                .unwrap_or("未知错误");
-            Err(AppError::DownloadError(format!("Worker API 返回失败：{}", msg)))
+        let current = std::env::current_dir()
+            .map_err(|e| AppError::DownloadError(format!("获取当前目录失败：{}", e)))?;
+        let mut project_root = current.clone();
+        for _ in 0..10 {
+            if project_root.join("package.json").exists() {
+                break;
+            }
+            if let Some(parent) = project_root.parent() {
+                project_root = parent.to_path_buf();
+            } else {
+                break;
+            }
         }
+
+        let script_path = project_root.join("scripts").join("get_download_link.js");
+        if !script_path.exists() {
+            return Err(AppError::DownloadError(format!("脚本不存在：{}", script_path.display())));
+        }
+
+        let output = TokioCommand::new("node")
+            .arg(&script_path)
+            .arg(file_key)
+            .arg(file_name)
+            .output()
+            .await
+            .map_err(|e| AppError::DownloadError(format!("执行脚本失败：{}", e)))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        if !stderr.is_empty() {
+            eprintln!("🔗 Worker 脚本输出：{}", stderr);
+        }
+
+        let info: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| AppError::DownloadError(format!("解析 Worker 结果失败：{}\n输出：{}", e, stdout)))?;
+
+        if info.get("success").and_then(|v| v.as_bool()) != Some(true) {
+            let err = info.get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Worker API 未返回有效链接");
+            return Err(AppError::DownloadError(err.to_string()));
+        }
+
+        let url = info.get("url")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::DownloadError("Worker API 未返回 url 字段".to_string()))?;
+
+        Ok(url.to_string())
     }
 
     /// 下载单个文件（支持断点续传）

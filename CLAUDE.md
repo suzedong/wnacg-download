@@ -42,16 +42,18 @@ cargo build --release    # 发布构建
 
 - **前端 → 后端**: Tauri 命令，通过 `@tauri-apps/api/core` 的 `invoke()` 调用
 - **后端 → 前端**: Tauri 事件，通过 `@tauri-apps/api/event` 的 `listen()` 监听
-- 事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`error`
+- 事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`error`
 
 ### Tauri 命令（注册于 [src-tauri/src/main.rs](src-tauri/src/main.rs)）
 
 | 命令 | 说明 |
 |---|---|
 | `get_config`、`save_config`、`reset_config` | 配置管理 |
+| `open_folder` | 打开本地文件夹（系统原生方式：explorer/open/xdg-open） |
 | `search_comics` | 为每页派生 Node.js Playwright 脚本，并行执行 |
 | `compare_comics` | 读取缓存的搜索结果，扫描本地文件夹，本地优先匹配 + AI 兜底标题匹配 |
 | `save_compare_result`、`load_compare_result` | 对比结果持久化（保存/加载历史对比记录） |
+| `get_download_info` | 通过 Playwright 获取下载页信息（file_key、file_name、server2_url） |
 | `start_download` | 并发批量下载，支持重试和断点续传 |
 | `window_minimize`、`window_maximize`、`window_close` | 窗口控制 |
 
@@ -76,6 +78,12 @@ cargo build --release    # 发布构建
 - [error.rs](src-tauri/src/error.rs) — AppError 枚举
 - [types.rs](src-tauri/src/types.rs) — Rust 类型模块
 
+### Playwright 脚本（`scripts/`）
+
+- [search_with_playwright.js](scripts/search_with_playwright.js) — 搜索漫画，打开真实浏览器访问 wnacg.com 搜索结果页，提取漫画列表
+- [get_download_info.js](scripts/get_download_info.js) — 获取下载页信息，打开下载页提取 file_key、file_name 和 server2_url
+- [get_download_link.js](scripts/get_download_link.js) — 调用 Worker API 获取临时下载链接，在浏览器上下文中绕过 Cloudflare
+
 ### 搜索流程（Playwright，非 Rust HTTP）
 
 `search_comics` → 派生 `node scripts/search_with_playwright.js <keyword> <page>` → 有头 Chromium 浏览器访问 wnacg.com → 从 `div.pic_box` 元素提取数据 → 输出 JSON 到标准输出。这样可以避免纯 HTTP 请求被 Cloudflare 拦截的问题。
@@ -86,7 +94,7 @@ cargo build --release    # 发布构建
 
 ### 缓存
 
-存储路径：`{exe_dir}/cache/`，以 JSON 文件形式存储（如 `search_{keyword}.json`）。
+存储路径：`{exe_dir}/cache/`，以 JSON 文件形式存储（如 `search_{keyword}.json`、`compare_{keyword}_{timestamp}.json`）。
 
 ---
 
@@ -113,7 +121,7 @@ cargo build --release    # 发布构建
 - 漫画卡片选择器：`li.gallary_item`
 - 分类容器：`div.pic_box`（`cate-*` 类名在此元素上）
 - 链接格式：`a[href*="photos-index"]`，aid 格式：`aid-{数字}`
-- 标题处理：需要去除 `<em>` 标签
+- 标题处理：需要去除 `<em>` 标签和 HTML 实体（`&nbsp;`、`&amp;`、`&#124;` 等）
 - 图片数量：从 `div.info_col` 提取（匹配 `(\d+)張圖片`）
 - 创建时间：从 `div.info_col` 提取（匹配 `創建於(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})`）
 - 分类映射表：
@@ -148,11 +156,16 @@ cargo build --release    # 发布构建
 - 下载失败时会尝试重试
 - 支持断点续传
 - 下载完成后校验文件完整性
+- **获取下载地址的三级回退策略**：
+  1. **Worker API**（Playwright 调用）：`scripts/get_download_link.js` 在浏览器中调用 `d1.wcdn.date/api/generate-link` 获取临时链接
+  2. **Server 2 直链**（Playwright 提取）：从下载页提取的 `server2_url`
+  3. **拼接直链**（兜底）：`https://dl1.wn01.download/{file_key}`
 
 ### AI 匹配规则
 - **两阶段匹配流程**：
   1. **本地优先**：Levenshtein 距离 + 标题前缀清洗（去除 `[TYPE.90]` 等），置信度 >= match_threshold 即标记为已拥有
   2. **AI 兜底**：仅对本地未匹配的漫画调用 AI API（OpenAI 兼容接口，SSE 流式输出），减少 API 调用
+- **AI API 未配置时**：所有未匹配的漫画自动标记为 `need_download`，不会丢失
 - 前端实时显示 AI 流式输出内容（`ai_progress` 事件的 `streaming_content` 字段）
 - 匹配阈值可通过配置调整，默认为 0.8
 - 全部本地匹配时跳过 AI，零 API 调用
@@ -182,7 +195,7 @@ cargo build --release    # 发布构建
 
 ### 禁止行为 ❌
 
-- ❌ 不阅读文档就编码
+-  不阅读文档就编码
 - ❌ 跳过验收标准
 - ❌ 随意更改架构设计
 - ❌ 忽略错误处理

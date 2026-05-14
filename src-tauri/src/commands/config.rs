@@ -1,5 +1,6 @@
 // 配置命令
 
+use std::process::Command;
 use tauri::command;
 
 #[command]
@@ -15,4 +16,42 @@ pub fn save_config(config: crate::types::config::AppConfig) -> Result<(), String
 #[command]
 pub fn reset_config() -> Result<crate::types::config::AppConfig, String> {
     crate::config::reset_config().map_err(|e| e.to_string())
+}
+
+/// 打开本地文件夹（使用系统原生方式）
+#[command]
+pub fn open_folder(path: String) -> Result<(), String> {
+    let path_obj = std::path::Path::new(&path);
+    if !path_obj.exists() {
+        return Err(format!("文件夹不存在：{}", path));
+    }
+    if !path_obj.is_dir() {
+        return Err(format!("不是文件夹：{}", path));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("explorer")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("打开文件夹失败：{}", e))?;
+    }
+
+    Ok(())
 }

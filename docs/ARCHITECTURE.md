@@ -31,12 +31,12 @@
 │  │  后端（Rust）                                      │ │
 │  │  ├── commands/         # Tauri Commands            │ │
 │  │  ├── core/             # 核心业务逻辑              │ │
-│  │  │   ├── scraper/      # 爬虫模块                  │ │
-│  │   ├── downloader/     # 下载模块                  │ │
-│  │   ├── comparer/       # 对比模块                  │ │
-│  │   ├── scanner/        # 扫描模块                  │ │
-│  │   └── ai/             # AI 匹配模块               │ │
+│  │  │   ├── downloader/     # 下载模块                  │ │
+│  │  │   ├── comparer/       # 对比模块                  │ │
+│  │  │   ├── scanner/        # 扫描模块                  │ │
+│  │  │   └── ai/             # AI 匹配模块               │ │
 │  │   ├── config/           # 配置管理                  │ │
+│  │   └── events/           # 事件定义                  │ │
 │  └───────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -55,7 +55,9 @@
 ├── dist/                         # 构建产物
 │
 ├── scripts/                      # 脚本目录
-│   └── search_with_playwright.js # Playwright 搜索脚本
+│   ├── search_with_playwright.js # Playwright 搜索脚本
+│   ├── get_download_info.js      # Playwright 获取下载页信息
+│   └── get_download_link.js      # Playwright 调用 Worker API
 │
 ├── src-tauri/                    # Tauri 应用（主目录）
 │   ├── src/
@@ -65,10 +67,9 @@
 │   │   │   ├── search.rs         # 搜索命令（Playwright）
 │   │   │   ├── compare.rs        # 对比命令
 │   │   │   ├── download.rs       # 下载命令
-│   │   │   └── config.rs         # 配置命令
+│   │   │   └── config.rs         # 配置命令（含 open_folder）
 │   │   ├── core/                 # 核心业务逻辑
 │   │   │   ├── mod.rs
-│   │   │   ├── scraper/          # 爬虫（旧方案，保留代码）
 │   │   │   ├── downloader/       # 下载
 │   │   │   ├── comparer/         # 对比
 │   │   │   ├── scanner/          # 扫描
@@ -201,7 +202,7 @@ pub async fn search_comics(
 - 并行爬取（多页同时进行）
 - 请求间隔控制
 - 代理支持（通过 Playwright 配置）
-- 标题处理（去除 `<em>` 标签）
+- 标题处理（去除 `<em>` 标签和 HTML 实体）
 - 分类提取（`cate-*` 类名）
 
 #### 3.2.2 下载器模块（downloader）
@@ -222,11 +223,17 @@ impl Downloader {
     }
 
     async fn download_single(&self, task: &DownloadTask) -> Result<()> {
-        // 断点续传
-        // 重试机制
+        // 1. Playwright 提取下载信息
+        // 2. 三级回退获取下载链接
+        // 3. 断点续传下载
     }
 }
 ```
+
+**获取下载地址的三级回退策略**：
+1. **Worker API**（Playwright 调用）：`scripts/get_download_link.js` 在浏览器中调用 `d1.wcdn.date/api/generate-link` 获取临时链接
+2. **Server 2 直链**（Playwright 提取）：从下载页提取的 `server2_url`
+3. **拼接直链**（兜底）：`https://dl1.wn01.download/{file_key}`
 
 **关键特性**：
 - 并发下载（可配置数量）
@@ -248,7 +255,8 @@ impl Comparer {
         // 1. 扫描本地文件夹
         // 2. 本地精确/模糊匹配全部网站漫画
         // 3. 仅对未匹配的漫画调用 AI API
-        // 4. 合并结果，生成对比
+        // 4. AI API 未配置时，未匹配的漫画自动标记为 need_download
+        // 5. 合并结果，生成对比
     }
 }
 ```
@@ -285,6 +293,7 @@ impl AiMatcher {
 - AI 调用分批处理（每批 20 部），SSE 流式输出
 - 前端实时显示 AI 流式内容（`streaming_content` 字段）
 - 全部本地匹配时跳过 AI，零 API 调用
+- **AI API 未配置时**：所有未匹配的漫画自动标记为 `need_download`，不会丢失
 
 #### 3.2.5 扫描器模块（scanner）
 
@@ -295,7 +304,7 @@ pub struct Scanner;
 impl Scanner {
     pub async fn scan_local(&self, path: &str) -> Result<Vec<LocalComic>> {
         // 1. 扫描文件夹
-        // 2. 提取漫画信息
+        // 2. 提取漫画信息（清理 HTML 实体）
         // 3. 返回列表
     }
 }
@@ -319,6 +328,9 @@ pub struct AppConfig {
     pub retry_interval: u64, // 单位：秒
     pub ai_api_url: String,
     pub ai_api_key: Option<String>,
+    pub ai_model: String,
+    pub ai_prompt: String,
+    pub ai_temperature: f64,
     pub match_threshold: f64,
     pub theme: String, // "light" 或 "dark"
 }
@@ -411,8 +423,8 @@ pub fn get_config() -> Result<Config, String> {
 }
 
 #[tauri::command]
-pub fn save_config(config: Config) -> Result<(), String> {
-    // 保存配置
+pub fn open_folder(path: String) -> Result<(), String> {
+    // 系统原生打开文件夹
 }
 ```
 
@@ -546,6 +558,13 @@ fn send_notification(app: &AppHandle, title: &str, body: &str) {
   ↓
 后端创建 Downloader
   ↓
+Playwright 提取下载信息（file_key、file_name、server2_url）
+  ↓
+三级回退获取下载地址：
+  1. Playwright 调用 Worker API 获取临时链接
+  2. Server 2 直链（Playwright 提取）
+  3. 拼接直链（兜底）
+  ↓
 并发下载（可配置数量）
   ↓
 发送 download_progress Event
@@ -578,6 +597,8 @@ Phase 2: 仅对未匹配的漫画调用 AI API（SSE 流式输出）
   ↓
 发送 ai_progress Event（AI 流式内容 streaming_content）
   ↓
+AI API 未配置时，未匹配的漫画自动标记为 need_download
+  ↓
 合并本地 + AI 匹配结果
   ↓
 返回对比结果到前端
@@ -609,6 +630,9 @@ pub enum AppError {
 
     #[error("配置错误：{0}")]
     ConfigError(String),
+
+    #[error("下载错误：{0}")]
+    DownloadError(String),
 }
 ```
 
