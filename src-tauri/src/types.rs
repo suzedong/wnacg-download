@@ -94,6 +94,23 @@ pub mod download {
         pub pages: u32,
     }
 
+    /// 下载配置（包含全局默认路径）
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct DownloadOptions {
+        /// 并发下载数
+        pub concurrent: u32,
+        /// 重试次数
+        pub retry_times: u32,
+        /// 重试间隔（秒）
+        pub retry_interval: u64,
+        /// 代理地址
+        pub proxy: Option<String>,
+        /// 是否启用代理
+        pub proxy_enabled: bool,
+        /// 默认保存路径
+        pub storage_path: String,
+    }
+
     /// 下载进度
     #[derive(Debug, Clone, Serialize, Deserialize)]
     #[allow(dead_code)]
@@ -147,6 +164,16 @@ pub mod compare {
         pub already_have: u32,
         /// 匹配详情
         pub match_details: Vec<MatchDetail>,
+        /// AI 响应原始内容（可选择查看）
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub ai_response: Option<String>,
+    }
+
+    /// AI 匹配结果（包含匹配详情和原始响应）
+    #[derive(Debug, Clone)]
+    pub struct AiMatchResult {
+        pub details: Vec<super::compare::MatchDetail>,
+        pub ai_response: Option<String>,
     }
 
     /// 匹配详情
@@ -170,6 +197,22 @@ pub mod compare {
 pub mod config {
     use serde::{Deserialize, Serialize};
 
+    fn default_ai_model() -> String {
+        "qwen3.5-plus".to_string()
+    }
+
+    fn default_ai_api_url() -> String {
+        "https://coding.dashscope.aliyuncs.com/v1/chat/completions".to_string()
+    }
+
+    fn default_ai_prompt() -> String {
+        "你是一个专业的漫画匹配助手。请对比以下网站漫画和本地漫画，判断哪些是相同的漫画（可能标题略有不同）。\n\n网站漫画列表：\n{website_comics}\n\n本地漫画列表：\n{local_comics}\n\n匹配规则：\n1. 根据漫画名称判断是否是同一部作品\n2. 考虑名称的变体、翻译差异、简繁体、前后缀差异等\n3. 给出每对匹配的置信度（0-1）\n4. 如果本地有匹配的，标记为 \"already_have\"\n5. 如果本地没有匹配的，标记为 \"need_download\"\n\n请返回 JSON 格式（只返回 JSON，不要其他内容）：\n{\n  \"matches\": [\n    {\n      \"website_title\": \"网站漫画标题\",\n      \"local_title\": \"本地漫画标题（如果没有则为 null）\",\n      \"match_type\": \"already_have 或 need_download\",\n      \"confidence\": 0.95,\n      \"reason\": \"匹配的简要理由\"\n    }\n  ]\n}".to_string()
+    }
+
+    fn default_ai_temperature() -> f64 {
+        0.0
+    }
+
     /// 配置结构
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct AppConfig {
@@ -192,9 +235,19 @@ pub mod config {
         /// 重试间隔（秒）
         pub retry_interval: u64,
         /// AI API 地址
+        #[serde(default = "default_ai_api_url")]
         pub ai_api_url: String,
         /// AI API Key
         pub ai_api_key: Option<String>,
+        /// AI 模型名称
+        #[serde(default = "default_ai_model")]
+        pub ai_model: String,
+        /// AI Prompt 模板
+        #[serde(default = "default_ai_prompt")]
+        pub ai_prompt: String,
+        /// AI 温度参数（0-2，0 表示确定性输出，关闭推理）
+        #[serde(default = "default_ai_temperature")]
+        pub ai_temperature: f64,
         /// 匹配阈值
         pub match_threshold: f64,
         /// 主题（light/dark）
@@ -213,11 +266,27 @@ pub mod config {
                 concurrent_downloads: 3,
                 retry_times: 3,
                 retry_interval: 30,
-                ai_api_url: String::new(),
-                ai_api_key: None,
+                ai_api_url: "https://coding.dashscope.aliyuncs.com/v1".to_string(),
+                ai_api_key: Some("sk-sp-4cf0ff7b598444949af23ee397b4cdf9".to_string()),
+                ai_model: "qwen3.5-plus".to_string(),
+                ai_prompt: "你是一个专业的漫画匹配助手。请对比以下网站漫画和本地漫画，判断哪些是相同的漫画（可能标题略有不同）。\n\n网站漫画列表：\n{website_comics}\n\n本地漫画列表：\n{local_comics}\n\n请返回 JSON 格式结果，包含：\n- website_title: 网站漫画标题\n- local_title: 匹配的本地漫画标题（如无匹配则为 null）\n- match_type: \"already_have\" 或 \"need_download\"\n- confidence: 匹配置信度 (0-1)\n- reason: 匹配原因".to_string(),
+                ai_temperature: 0.0,
                 match_threshold: 0.8,
                 theme: "light".to_string(),
             }
         }
+    }
+
+    /// 对比历史条目（持久化存储）
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct CompareHistoryEntry {
+        /// 搜索关键字
+        pub keyword: String,
+        /// 本地文件夹路径
+        pub local_path: String,
+        /// 对比时间（ISO 8601）
+        pub compared_at: String,
+        /// 对比结果
+        pub result: super::compare::CompareResult,
     }
 }

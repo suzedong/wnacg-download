@@ -37,6 +37,18 @@ pub struct CompareProgressEvent {
     pub total: u32,
 }
 
+/// AI 匹配进度事件（流式输出）
+#[derive(Clone, Serialize)]
+pub struct AiProgressEvent {
+    /// 进度消息
+    pub message: String,
+    /// 已接收字符数
+    pub received_bytes: usize,
+    /// 本次新增的流式内容（增量）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub streaming_content: Option<String>,
+}
+
 /// 下载完成事件
 #[derive(Clone, Serialize)]
 pub struct DownloadCompleteEvent {
@@ -68,6 +80,11 @@ pub fn emit_download_progress(app: &tauri::AppHandle, event: DownloadProgressEve
 /// 发送对比进度事件
 pub fn emit_compare_progress(app: &tauri::AppHandle, event: CompareProgressEvent) {
     let _ = app.emit("compare_progress", event);
+}
+
+/// 发送 AI 匹配进度事件
+pub fn emit_ai_progress(app: &tauri::AppHandle, event: AiProgressEvent) {
+    let _ = app.emit("ai_progress", event);
 }
 
 /// 发送下载完成事件

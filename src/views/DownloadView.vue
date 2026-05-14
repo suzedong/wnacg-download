@@ -96,14 +96,16 @@
       </div>
 
       <div v-if="downloadResult.failed_list.length > 0" class="failed-list">
-        <h4>失败的漫画</h4>
+        <h4>失败的漫画 ({{ downloadResult.failed_list.length }})</h4>
         <div
           v-for="failed in downloadResult.failed_list"
           :key="failed.title"
           class="failed-item"
         >
-          <span class="failed-title">{{ failed.title }}</span>
-          <span class="failed-reason">{{ failed.reason }}</span>
+          <div class="failed-content">
+            <span class="failed-title">{{ failed.title }}</span>
+            <span class="failed-reason">{{ failed.reason }}</span>
+          </div>
         </div>
       </div>
 
@@ -164,6 +166,7 @@ async function startDownload() {
     retry_interval: config.value.retry_interval,
     proxy: config.value.proxy,
     proxy_enabled: config.value.proxy_enabled,
+    storage_path: config.value.storage_path,
   });
 }
 
@@ -185,7 +188,7 @@ async function openDownloadFolder() {
         await loadConfig();
       }
 
-      let downloadPath = config.value?.default_save_path || './downloads';
+      let downloadPath = config.value?.storage_path || './downloads';
 
       // 解析路径
       const resolvedPath = await resolve(downloadPath);

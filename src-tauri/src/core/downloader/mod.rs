@@ -3,9 +3,10 @@ use crate::error::AppError;
 use crate::events::{self, DownloadCompleteEvent, DownloadProgressEvent};
 use crate::notification;
 use crate::types::download::{DownloadResult, DownloadTask, FailedComic};
+use futures_util::StreamExt;
 use reqwest::Client;
-use scraper::{Html, Selector};
-use std::fs;
+use std::fs::{self, File};
+use std::io::{Seek, SeekFrom, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -23,6 +24,8 @@ pub struct DownloaderConfig {
     /// 代理设置
     pub proxy: Option<String>,
     pub proxy_enabled: bool,
+    /// 默认存储路径
+    pub storage_path: String,
 }
 
 /// 下载器
@@ -142,149 +145,300 @@ impl Downloader {
     ) -> Result<(), AppError> {
         println!("⬇️ 开始下载：{}", task.title);
 
-        // 创建保存目录
-        let save_dir = Path::new(&task.save_path).join(&task.title);
+        // 确定保存路径（空时使用默认路径）
+        let save_dir = if task.save_path.is_empty() {
+            Path::new(&config.storage_path)
+        } else {
+            Path::new(&task.save_path)
+        };
         if !save_dir.exists() {
             fs::create_dir_all(&save_dir)?;
         }
 
-        // 获取漫画详情页
-        let detail_html = Self::fetch_with_retry(client, config, &task.url, 0).await?;
+        // 通过 Tauri 命令获取下载信息（Playwright 绕过 Cloudflare）
+        println!("📄 获取下载页信息：aid={}", task.aid);
+        let (file_key, file_name, server2_url) = Self::fetch_download_info(app, &task.aid).await?;
+        println!("📦 文件：{} ({})", file_name, file_key);
 
-        // 解析图片链接
-        let image_urls = Self::parse_image_urls(&detail_html)?;
-        let total_images = image_urls.len();
+        // 获取下载地址（双源：Server 1 → Server 2）
+        let download_link = Self::get_download_url(client, &file_key, &file_name, &server2_url).await?;
+        println!("🔗 下载地址：{}", download_link);
 
-        println!("📄 {} 共 {} 张图片", task.title, total_images);
-
-        // 下载所有图片
-        for (index, image_url) in image_urls.iter().enumerate() {
-            let file_name = format!("{:03}.jpg", index + 1);
-            let file_path = save_dir.join(&file_name);
-
-            // 断点续传：检查文件是否已存在
-            if file_path.exists() {
-                println!("⏭️ 跳过已下载：{}", file_name);
-                continue;
-            }
-
-            // 下载图片
-            let mut retries = 0;
-            loop {
-                match Self::download_image(client, image_url, &file_path).await {
-                    Ok(_) => {
-                        break;
-                    }
-                    Err(e) => {
-                        retries += 1;
-                        if retries >= config.retry_times {
-                            return Err(AppError::DownloadError(format!(
-                                "下载失败 {}，原因：{}",
-                                file_name, e
-                            )));
-                        }
-                        println!(
-                            "⚠️ 下载失败 {}（第 {} 次），{} 秒后重试...",
-                            file_name,
-                            retries,
-                            config.retry_interval
-                        );
-                        tokio::time::sleep(Duration::from_secs(config.retry_interval)).await;
-                    }
-                }
-            }
-
-            // 发送进度事件
-            let progress = ((index + 1) as f64 / total_images as f64) * 100.0;
-            events::emit_download_progress(
-                app,
-                DownloadProgressEvent {
-                    task_id: task.aid.clone(),
-                    progress,
-                    speed: 0.0,
-                    eta: 0,
-                },
-            );
-        }
+        // 下载文件
+        let file_path = save_dir.join(&file_name);
+        Self::download_file(client, config, app, &download_link, &file_path, &task.aid).await?;
 
         println!("✅ {} 下载完成", task.title);
 
         Ok(())
     }
 
-    /// 下载单个图片
-    async fn download_image(
-        client: &Client,
-        url: &str,
-        file_path: &Path,
-    ) -> Result<(), AppError> {
-        let response = client.get(url).send().await?;
-        let bytes = response.bytes().await?;
-
-        fs::write(file_path, &bytes)?;
-
-        Ok(())
+    /// 通过 Playwright 脚本获取下载信息（绕过 Cloudflare）
+    async fn fetch_download_info(
+        _app: &tauri::AppHandle,
+        aid: &str,
+    ) -> Result<(String, String, String), AppError> {
+        Self::run_playwright_download_script(aid).await
     }
 
-    /// 带重试的 HTTP 请求
-    async fn fetch_with_retry(
+    /// 运行 Playwright 脚本获取下载信息
+    async fn run_playwright_download_script(aid: &str) -> Result<(String, String, String), AppError> {
+        use tokio::process::Command as TokioCommand;
+
+        // 查找项目根目录
+        let current = std::env::current_dir()
+            .map_err(|e| AppError::DownloadError(format!("获取当前目录失败：{}", e)))?;
+        let mut project_root = current.clone();
+        for _ in 0..10 {
+            if project_root.join("package.json").exists() {
+                break;
+            }
+            if let Some(parent) = project_root.parent() {
+                project_root = parent.to_path_buf();
+            } else {
+                break;
+            }
+        }
+
+        let script_path = project_root.join("scripts").join("get_download_info.js");
+        if !script_path.exists() {
+            return Err(AppError::DownloadError(format!("脚本不存在：{}", script_path.display())));
+        }
+
+        let output = TokioCommand::new("node")
+            .arg(&script_path)
+            .arg(aid)
+            .output()
+            .await
+            .map_err(|e| AppError::DownloadError(format!("执行脚本失败：{}", e)))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+
+        if !stderr.is_empty() {
+            eprintln!("📄 脚本输出：{}", stderr);
+        }
+
+        let info: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| AppError::DownloadError(format!("解析结果失败：{}\n输出：{}", e, stdout)))?;
+
+        if info.get("success").and_then(|v| v.as_bool()) != Some(true) {
+            let err = info.get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("获取下载信息失败");
+            return Err(AppError::DownloadError(err.to_string()));
+        }
+
+        let file_key = info.get("file_key")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::DownloadError("未找到 FILE_KEY".to_string()))?
+            .to_string();
+
+        let file_name_raw = info.get("file_name")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::DownloadError("未找到 FILE_NAME".to_string()))?;
+        let file_name = Self::decode_html_entities(file_name_raw);
+
+        let server2_url_raw = info.get("server2_url")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let server2_url = if server2_url_raw.starts_with("//") {
+            format!("https:{}", server2_url_raw)
+        } else {
+            server2_url_raw.to_string()
+        };
+
+        Ok((file_key, file_name, server2_url))
+    }
+
+    /// 解码常见 HTML 实体
+    fn decode_html_entities(s: &str) -> String {
+        s.replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .replace("&#x27;", "'")
+            .replace("&#124;", "|")
+    }
+
+    /// 获取下载地址（双源：Server 1 → Server 2）
+    async fn get_download_url(
+        client: &Client,
+        file_key: &str,
+        file_name: &str,
+        server2_url: &str,
+    ) -> Result<String, AppError> {
+        // 尝试 Server 1：Worker API 获取临时链接
+        match Self::get_url_from_worker(client, file_key, file_name).await {
+            Ok(url) => {
+                println!("🔗 使用 Server 1 链接");
+                return Ok(url);
+            }
+            Err(e) => println!("⚠️ Server 1 获取失败：{}，尝试备用线路...", e),
+        }
+
+        // 回退 Server 2：优先使用 Playwright 提取的直接链接
+        if !server2_url.is_empty() {
+            let url = if server2_url.starts_with("//") {
+                format!("https:{}", server2_url)
+            } else {
+                server2_url.to_string()
+            };
+            println!("🔗 使用 Server 2 备用线路（Playwright 提取）");
+            return Ok(url);
+        }
+
+        // 最后回退：拼接直链
+        let direct_url = format!("https://dl1.wn01.download/{}", file_key);
+        println!("🔗 使用 Server 2 备用线路（拼接）");
+        Ok(direct_url)
+    }
+
+    /// Server 1：通过 Worker API 获取临时下载链接
+    async fn get_url_from_worker(
+        client: &Client,
+        file_key: &str,
+        file_name: &str,
+    ) -> Result<String, AppError> {
+        let worker_url = "https://d1.wcdn.date/api/generate-link";
+
+        let body = serde_json::json!({
+            "file_key": file_key,
+            "file_name": file_name
+        });
+
+        let response = client
+            .post(worker_url)
+            .timeout(Duration::from_secs(30))
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AppError::DownloadError(format!("Worker API 请求失败：{}", e)))?;
+
+        let json_val: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AppError::DownloadError(format!("Worker API 响应解析失败：{}", e)))?;
+
+        if json_val.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+            json_val
+                .get("url")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+                .ok_or_else(|| AppError::DownloadError("Worker API 未返回有效链接".to_string()))
+        } else {
+            let msg = json_val
+                .get("msg")
+                .and_then(|v| v.as_str())
+                .unwrap_or("未知错误");
+            Err(AppError::DownloadError(format!("Worker API 返回失败：{}", msg)))
+        }
+    }
+
+    /// 下载单个文件（支持断点续传）
+    async fn download_file(
         client: &Client,
         config: &DownloaderConfig,
+        app: &tauri::AppHandle,
         url: &str,
-        _retry_count: u32,
-    ) -> Result<String, AppError> {
+        file_path: &Path,
+        task_id: &str,
+    ) -> Result<(), AppError> {
         let mut retries = 0;
         loop {
-            match client.get(url).send().await {
-                Ok(response) => match response.text().await {
-                    Ok(html) => return Ok(html),
-                    Err(e) => {
-                        if retries >= config.retry_times {
-                            return Err(AppError::DownloadError(format!("请求失败：{}", e)));
-                        }
-                        retries += 1;
-                        tokio::time::sleep(Duration::from_secs(config.retry_interval)).await;
-                    }
-                },
+            match Self::download_file_inner(client, app, url, file_path, task_id).await {
+                Ok(_) => return Ok(()),
                 Err(e) => {
-                    if retries >= config.retry_times {
-                        return Err(AppError::DownloadError(format!("请求失败：{}", e)));
-                    }
                     retries += 1;
+                    if retries >= config.retry_times {
+                        return Err(AppError::DownloadError(format!(
+                            "下载失败 {}，原因：{}",
+                            file_path.display(),
+                            e
+                        )));
+                    }
+                    println!(
+                        "⚠️ 下载失败（第 {} 次），{} 秒后重试...",
+                        retries, config.retry_interval
+                    );
                     tokio::time::sleep(Duration::from_secs(config.retry_interval)).await;
                 }
             }
         }
     }
 
-    /// 解析图片 URL
-    fn parse_image_urls(html: &str) -> Result<Vec<String>, AppError> {
-        let document = Html::parse_document(html);
-        let mut urls = vec![];
-
-        // 查找所有图片
-        let img_selector = Selector::parse("img").unwrap();
-
-        for img in document.select(&img_selector) {
-            if let Some(src) = img.value().attr("src") {
-                // 过滤缩略图，只下载大图
-                if !src.contains("thumb") {
-                    let url = if src.starts_with("//") {
-                        format!("https:{}", src)
-                    } else if src.starts_with("/") {
-                        format!("https://www.wnacg.com{}", src)
-                    } else {
-                        src.to_string()
-                    };
-                    urls.push(url);
-                }
+    /// 下载文件内部实现（带断点续传）
+    async fn download_file_inner(
+        client: &Client,
+        app: &tauri::AppHandle,
+        url: &str,
+        file_path: &Path,
+        task_id: &str,
+    ) -> Result<(), AppError> {
+        // 断点续传：检查已有文件大小
+        let mut existing_size = 0u64;
+        if file_path.exists() {
+            let meta = fs::metadata(file_path)?;
+            existing_size = meta.len();
+            if existing_size > 0 {
+                println!("⏭️ 断点续传：已有 {} 字节", existing_size);
             }
         }
 
-        if urls.is_empty() {
-            return Err(AppError::DownloadError("未找到图片链接".to_string()));
+        // 构建请求，支持 Range 头
+        let mut request = client.get(url);
+        if existing_size > 0 {
+            request = request.header("Range", format!("bytes={}-", existing_size));
         }
 
-        Ok(urls)
+        let response = request
+            .send()
+            .await
+            .map_err(|e| AppError::DownloadError(format!("请求失败：{}", e)))?;
+
+        // 获取总大小
+        let content_length = response.content_length().unwrap_or(0);
+        let total_size = if existing_size > 0 && content_length > 0 {
+            existing_size + content_length
+        } else {
+            content_length
+        };
+
+        // 打开文件（追加模式或新建）
+        let mut file = if existing_size > 0 {
+            let mut f = fs::OpenOptions::new().write(true).open(file_path)?;
+            f.seek(SeekFrom::End(0))?;
+            f
+        } else {
+            File::create(file_path)?
+        };
+
+        // 流式下载
+        let mut downloaded = existing_size;
+        let mut stream = response.bytes_stream();
+
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| AppError::NetworkError(e))?;
+            file.write_all(&bytes)?;
+            downloaded += bytes.len() as u64;
+
+            // 发送进度事件
+            if total_size > 0 {
+                let progress = (downloaded as f64 / total_size as f64) * 100.0;
+                events::emit_download_progress(
+                    app,
+                    DownloadProgressEvent {
+                        task_id: task_id.to_string(),
+                        progress,
+                        speed: 0.0,
+                        eta: 0,
+                    },
+                );
+            }
+        }
+
+        Ok(())
     }
 }

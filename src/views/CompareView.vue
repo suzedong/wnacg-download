@@ -44,17 +44,81 @@
         >
           {{ isComparing ? '对比中...' : '🔍 开始对比' }}
         </button>
+
+        <div class="divider"></div>
+
+        <div class="form-group">
+          <label>📜 历史对比结果</label>
+          <div class="history-list" v-if="compareHistoryFiles.length > 0">
+            <div
+              v-for="file in compareHistoryFiles"
+              :key="file.path"
+              class="history-item"
+              :class="{ active: selectedHistoryFile === file.path }"
+              @click="selectHistoryFile(file.path)"
+            >
+              <span class="history-keyword">{{ file.label }}</span>
+              <button
+                class="btn-delete"
+                @click.stop="showDeleteConfirm(file.path)"
+              >
+                删除
+              </button>
+            </div>
+          </div>
+          <div v-else class="history-empty">
+            <span>暂无历史对比记录</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <div v-if="isComparing" class="progress-section">
-      <div class="progress-bar">
-        <div
-          class="progress-fill"
-          :style="{ width: `${(progress / total) * 100}%` }"
-        ></div>
+    <!-- 删除确认模态框 -->
+    <div
+      v-if="showDeleteConfirmModal"
+      class="modal-overlay"
+      @click="cancelDelete"
+    >
+      <div class="confirm-dialog" @click.stop>
+        <h3>确认删除</h3>
+        <p>确定要删除这条对比历史吗？</p>
+        <div class="confirm-actions">
+          <button class="btn-cancel" @click="cancelDelete">取消</button>
+          <button class="btn-confirm-delete" @click="executeDelete">
+            确定
+          </button>
+        </div>
       </div>
-      <p class="progress-text">对比进度：{{ progress }}/{{ total }}</p>
+    </div>
+
+    <div v-if="isComparing" class="ai-streaming-section">
+      <div class="ai-streaming-header">
+        <span class="ai-icon">🤖</span>
+        <span class="ai-label">AI 匹配中</span>
+      </div>
+
+      <!-- 状态日志 -->
+      <div v-if="aiLog.length > 0" class="ai-log">
+        <div
+          v-for="(log, index) in aiLog"
+          :key="index"
+          class="ai-log-line"
+        >
+          {{ log }}
+        </div>
+      </div>
+
+      <!-- 流式内容显示 -->
+      <div v-if="aiStreamingContent" class="ai-streaming-content">
+        <div class="streaming-label">流式输出：</div>
+        <pre class="streaming-text">{{ aiStreamingContent }}</pre>
+      </div>
+
+      <!-- 等待中动画 -->
+      <div v-if="aiLog.length === 0 && !aiStreamingContent" class="ai-waiting">
+        <div class="spinner"></div>
+        <span>正在初始化 AI 匹配...</span>
+      </div>
     </div>
 
     <div v-if="error" class="error-message">
@@ -103,6 +167,25 @@
         <div class="stat-card stat-success">
           <div class="stat-value">{{ compareResult.already_have }}</div>
           <div class="stat-label">已拥有</div>
+        </div>
+      </div>
+
+      <div v-if="compareResult.ai_response" class="ai-response-section">
+        <button class="btn-secondary" @click="showAiResponse = true">
+          📋 查看 AI 响应内容
+        </button>
+      </div>
+
+      <!-- AI 响应弹窗 -->
+      <div v-if="showAiResponse" class="modal-overlay" @click.self="showAiResponse = false">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>🤖 AI 响应内容</h3>
+            <button class="modal-close" @click="showAiResponse = false">✕</button>
+          </div>
+          <div class="modal-body">
+            <pre class="ai-response-content">{{ compareResult.ai_response }}</pre>
+          </div>
         </div>
       </div>
 
@@ -170,14 +253,14 @@
               </span>
               <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
-            <p class="local-title" v-if="detail.local">
-              本地: {{ detail.local.title }}
-            </p>
             <p
               class="cleaned-names"
               v-if="detail.local && detail.algorithm === '本地'"
             >
               清理后: <span v-html="highlightMatch(detail.website.title, detail.local.title).html2"></span>
+            </p>
+            <p class="local-title" v-if="detail.local">
+              本地: {{ detail.local.title }}
             </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
@@ -219,14 +302,14 @@
               </span>
               <span class="algorithm-badge">{{ detail.algorithm }}</span>
             </div>
-            <p class="local-title" v-if="detail.local">
-              本地: {{ detail.local.title }}
-            </p>
             <p
               class="cleaned-names"
               v-if="detail.local && detail.algorithm === '本地'"
             >
               清理后: <span v-html="highlightMatch(detail.website.title, detail.local.title).html2"></span>
+            </p>
+            <p class="local-title" v-if="detail.local">
+              本地: {{ detail.local.title }}
             </p>
             <p class="match-reason" v-if="detail.reason">{{ detail.reason }}</p>
           </div>
@@ -235,7 +318,16 @@
     </div>
 
     <div v-if="compareResult" class="actions">
-      <button class="btn-secondary" @click="resetCompare">🔄 重新对比</button>
+      <button
+        v-if="isViewingHistory"
+        class="btn-primary"
+        @click="addAllToDownload"
+      >
+        ➕ 添加到下载队列
+      </button>
+      <button class="btn-secondary" @click="resetCompare">
+        {{ isViewingHistory ? '返回' : '🔄 重新对比' }}
+      </button>
     </div>
   </div>
 </template>
@@ -244,12 +336,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useCompare } from '../composables/useCompare';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
-import { CompareResult, MatchDetail, DownloadTask } from '../types/index';
-import { readDir, readTextFile } from '@tauri-apps/plugin-fs';
+import { CompareResult, MatchDetail, DownloadTask, CompareHistoryEntry } from '../types/index';
+import { readDir, readTextFile, remove } from '@tauri-apps/plugin-fs';
 import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 
-const { isComparing, progress, total, result, error, compare, cleanup } =
+const { isComparing, aiLog, aiStreamingContent, result, error, compare, cleanup } =
   useCompare();
 const { addToQueue } = useDownloadQueue();
 
@@ -257,6 +349,11 @@ const searchFile = ref('');
 const localPath = ref('');
 const selectedForDownload = ref<string[]>([]);
 const cacheFiles = ref<Array<{ path: string; label: string }>>([]);
+const compareHistoryFiles = ref<Array<{ path: string; label: string }>>([]);
+const selectedHistoryFile = ref('');
+const showAiResponse = ref(false);
+const showDeleteConfirmModal = ref(false);
+const deleteTargetPath = ref('');
 
 let isComponentMounted = true;
 
@@ -297,7 +394,7 @@ function cleanHtmlEntities(title: string): string {
   return cleaned.replace(/\s+/g, ' ').trim();
 }
 
-// 清理漫画名：去除 HTML 实体 + 多余空格 + [], (), ()[], []() 等前缀
+// 清理漫画名：去除 HTML 实体 + 多余空格 + [], (), 【】等前缀
 function cleanTitle(title: string): string {
   const cleaned = cleanHtmlEntities(title);
   // 匹配开头的 [], (), 【】, 以及它们的组合（允许括号间有空格）
@@ -394,6 +491,8 @@ const compareResult = computed(() => result.value as CompareResult | null);
 
 const hasSearchResult = computed(() => !!compareResult.value);
 
+const isViewingHistory = computed(() => !!selectedHistoryFile.value && !!compareResult.value);
+
 const needDownload = computed(() => {
   if (!compareResult.value) return [];
   return compareResult.value.match_details
@@ -447,6 +546,7 @@ async function loadCacheFiles() {
           const files = await readDir(cacheDir);
 
           const file_list: Array<{ path: string; label: string }> = [];
+          const history_list: Array<{ path: string; label: string }> = [];
 
           for (const file of files) {
             if (
@@ -463,7 +563,6 @@ async function loadCacheFiles() {
                 const content = await readTextFile(filePath);
                 const comics = JSON.parse(content);
                 const count = comics.length;
-                const timeStr = new Date().toLocaleString();
 
                 file_list.push({
                   path: filePath,
@@ -472,11 +571,45 @@ async function loadCacheFiles() {
               } catch (e) {
                 console.error('读取缓存文件失败：', e);
               }
+            } else if (
+              file.name.endsWith('.json') &&
+              file.name.startsWith('compare_')
+            ) {
+              const filePath = await join(cacheDir, file.name);
+              const match = file.name.match(/compare_(.+)_(\d{8}_\d{6})\.json/);
+              const keyword = match ? match[1].replace(/_/g, ' ') : '未知';
+              const timestamp = match ? match[2] : '';
+
+              try {
+                const content = await readTextFile(filePath);
+                const entry: CompareHistoryEntry = JSON.parse(content);
+                const formattedTime = formatCompareTimestamp(timestamp);
+                const r = entry.result;
+
+                // 统计本地/AI 匹配的已拥有数量
+                const alreadyHaveDetails = r.match_details.filter(
+                  (d: MatchDetail) => d.match_type === 'already_have'
+                );
+                const localMatched = alreadyHaveDetails.filter(
+                  (d: MatchDetail) => d.algorithm === '本地'
+                ).length;
+                const aiMatched = alreadyHaveDetails.filter(
+                  (d: MatchDetail) => d.algorithm === 'AI'
+                ).length;
+
+                history_list.push({
+                  path: filePath,
+                  label: `${keyword} - ${formattedTime} | 网站 ${r.website_comics} ,本地 ${r.local_comics} ,需下载 ${r.to_download} ,已拥有 ${r.already_have}（本地 ${localMatched} + AI ${aiMatched}）`,
+                });
+              } catch (e) {
+                console.error('读取对比历史文件失败：', e);
+              }
             }
           }
 
           if (isComponentMounted) {
             cacheFiles.value = file_list;
+            compareHistoryFiles.value = history_list.sort((a, b) => b.path.localeCompare(a.path));
           }
           return;
         } catch (e) {
@@ -516,7 +649,71 @@ async function browseLocalPath() {
 async function handleCompare() {
   if (!searchFile.value || !localPath.value) return;
   saveLocalPath(); // 保存本地路径
+  selectedHistoryFile.value = ''; // 清除历史选择
   await compare(searchFile.value, localPath.value);
+}
+
+// 格式化对比历史时间戳
+function formatCompareTimestamp(ts: string): string {
+  if (ts.length === 15) {
+    return `${ts.slice(0, 4)}-${ts.slice(4, 6)}-${ts.slice(6, 8)} ${ts.slice(9, 11)}:${ts.slice(11, 13)}:${ts.slice(13, 15)}`;
+  }
+  return ts;
+}
+
+// 选择历史文件并加载
+async function selectHistoryFile(filePath: string) {
+  selectedHistoryFile.value = filePath;
+  try {
+    const content = await readTextFile(filePath);
+    const entry: CompareHistoryEntry = JSON.parse(content);
+    result.value = entry.result;
+    localPath.value = entry.local_path;
+    saveLocalPath();
+    selectedForDownload.value = [];
+  } catch (e: any) {
+    error.value = `加载历史对比结果失败：${e.message}`;
+  }
+}
+
+// 显示删除确认
+function showDeleteConfirm(filePath: string) {
+  deleteTargetPath.value = filePath;
+  showDeleteConfirmModal.value = true;
+}
+
+// 取消删除
+function cancelDelete() {
+  deleteTargetPath.value = '';
+  showDeleteConfirmModal.value = false;
+}
+
+// 执行删除
+async function executeDelete() {
+  if (deleteTargetPath.value) {
+    await deleteCompareHistory(deleteTargetPath.value);
+  }
+  cancelDelete();
+}
+
+// 删除对比历史
+async function deleteCompareHistory(filePath: string) {
+  try {
+    if (typeof window !== 'undefined' && window.__TAURI__ !== undefined) {
+      await remove(filePath);
+      // 如果删除的是当前选中的历史，清除结果
+      if (selectedHistoryFile.value === filePath) {
+        selectedHistoryFile.value = '';
+        result.value = null;
+      }
+      // 重新加载历史
+      await loadCacheFiles();
+    } else {
+      console.log('非 Tauri 环境，跳过删除对比历史');
+    }
+  } catch (e: any) {
+    error.value = `删除对比历史失败：${e.message}`;
+  }
 }
 
 function toggleSelect(aid: string) {
@@ -536,6 +733,7 @@ function addSelectedToDownload() {
       url: d.website.url,
       cover_url: d.website.cover_url,
       save_path: localPath.value,
+      pages: d.website.pages,
     } as DownloadTask;
   });
 
@@ -555,6 +753,7 @@ function addAllToDownload() {
       url: d.website.url,
       cover_url: d.website.cover_url,
       save_path: localPath.value,
+      pages: d.website.pages,
     } as DownloadTask;
   });
 
@@ -571,6 +770,7 @@ function resetCompare() {
   searchFile.value = '';
   localPath.value = '';
   selectedForDownload.value = [];
+  selectedHistoryFile.value = '';
 }
 
 async function handleRetry() {
@@ -700,31 +900,93 @@ h3 {
   background: var(--border-color);
 }
 
-.progress-section {
+.ai-streaming-section {
   background: var(--bg-card);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
 }
 
-.progress-bar {
-  height: 8px;
-  background: var(--border-color);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-bottom: 12px;
+.ai-streaming-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
 }
 
-.progress-fill {
-  height: 100%;
-  background: var(--primary-gradient);
-  transition: width 0.3s ease;
+.ai-streaming-header .ai-icon {
+  font-size: 18px;
 }
 
-.progress-text {
-  text-align: center;
-  color: var(--text-secondary);
+.ai-streaming-header .ai-label {
   font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-log {
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+}
+
+.ai-log-line {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.ai-streaming-content {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--bg-primary);
+}
+
+.streaming-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.streaming-text {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.ai-waiting {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-color);
+  border-top-color: #667eea;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .error-message {
@@ -1046,10 +1308,216 @@ h3 {
   opacity: 0.6;
 }
 
+.ai-response-section {
+  margin-bottom: 16px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--bg-card);
+  border-radius: 12px;
+  max-width: 90vw;
+  max-height: 80vh;
+  width: 800px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--border-color);
+}
+
+.modal-body {
+  padding: 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ai-response-content {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  background: var(--bg-primary);
+  padding: 16px;
+  border-radius: 8px;
+  color: var(--text-primary);
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+}
+
 .actions {
   margin-top: 24px;
   display: flex;
   gap: 12px;
   justify-content: center;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 8px 0;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid transparent;
+}
+
+.history-item:hover {
+  background: var(--border-color);
+}
+
+.history-item.active {
+  border-color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.history-keyword {
+  font-size: 13px;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-delete {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #f56c6c;
+  background: transparent;
+  border: 1px solid #f56c6c;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.btn-delete:hover {
+  background: #f56c6c;
+  color: #fff;
+}
+
+.history-empty {
+  padding: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.confirm-dialog {
+  background: var(--bg-card);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: var(--text-primary);
+}
+
+.confirm-dialog p {
+  margin: 0 0 20px 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.btn-cancel {
+  padding: 8px 20px;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.btn-cancel:hover {
+  background: var(--border-color);
+}
+
+.btn-confirm-delete {
+  padding: 8px 20px;
+  background: #f56c6c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.btn-confirm-delete:hover {
+  opacity: 0.9;
 }
 </style>

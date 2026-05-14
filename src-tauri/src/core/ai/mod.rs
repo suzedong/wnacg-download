@@ -1,34 +1,48 @@
 // AI 匹配模块
 
 use crate::error::AppError;
-use crate::types::compare::MatchDetail;
+use crate::events::AiProgressEvent;
+use crate::types::compare::{AiMatchResult, MatchDetail};
 use crate::types::comic::{Comic, LocalComic};
+use futures_util::stream::StreamExt;
 use regex::Regex;
 use reqwest::Client;
 use serde_json::json;
 use std::collections::HashMap;
 use std::time::Duration;
 
+/// 每批处理的漫画数量
+const BATCH_SIZE: usize = 20;
+/// AI 响应最大 token 数
+const MAX_TOKENS: u32 = 8000;
+
 /// AI 匹配器
 pub struct AiMatcher {
     client: Client,
     api_url: String,
     api_key: Option<String>,
+    model: String,
+    prompt_template: String,
+    temperature: f64,
     #[allow(dead_code)]
     match_threshold: f64,
 }
 
 impl AiMatcher {
     /// 创建新的 AI 匹配器
+    #[allow(dead_code)]
     pub fn new(
         api_url: String,
         api_key: Option<String>,
+        model: String,
+        prompt_template: String,
+        temperature: f64,
         match_threshold: f64,
         proxy: Option<String>,
         proxy_enabled: bool,
     ) -> Result<Self, AppError> {
         let mut client_builder = Client::builder()
-            .timeout(Duration::from_secs(120))
+            .timeout(Duration::from_secs(300))
             .user_agent("WNACG-Downloader/4.0");
 
         // 配置代理
@@ -44,22 +58,37 @@ impl AiMatcher {
             client,
             api_url,
             api_key,
+            model,
+            prompt_template,
+            temperature,
             match_threshold,
         })
     }
 
-    /// 批量匹配漫画
+    /// 批量匹配漫画（本地优先 + AI 兜底）
     pub async fn match_comics(
         &self,
+        app: &tauri::AppHandle,
         website_comics: &[Comic],
         local_comics: &[LocalComic],
-    ) -> Result<Vec<MatchDetail>, AppError> {
-        println!("🤖 开始 AI 匹配：网站 {} 部，本地 {} 部", website_comics.len(), local_comics.len());
+    ) -> Result<AiMatchResult, AppError> {
+        println!(" 开始对比：网站 {} 部，本地 {} 部", website_comics.len(), local_comics.len());
+
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: " 正在准备对比...".to_string(),
+            received_bytes: 0,
+            streaming_content: None,
+        });
 
         // 如果本地漫画为空，所有网站漫画都标记为需要下载
         if local_comics.is_empty() {
-            println!("⚠️ 本地漫画为空，跳过 AI 对比，所有漫画标记为需要下载");
-            return Ok(website_comics
+            println!("️ 本地漫画为空，跳过对比，所有漫画标记为需要下载");
+            let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                message: "️ 本地无漫画，跳过匹配".to_string(),
+                received_bytes: 0,
+            streaming_content: None,
+            });
+            let details: Vec<MatchDetail> = website_comics
                 .iter()
                 .map(|comic| MatchDetail {
                     website: comic.clone(),
@@ -69,133 +98,336 @@ impl AiMatcher {
                     reason: "本地无漫画".to_string(),
                     algorithm: "本地".to_string(),
                 })
-                .collect());
+                .collect();
+            return Ok(AiMatchResult { details, ai_response: None });
         }
 
-        // 检查 AI 配置
-        if self.api_url.is_empty() {
-            println!("⚠️ AI API 地址未配置，使用本地相似度匹配");
-            return self.local_match(website_comics, local_comics).await;
+        // Phase 1: 本地精确/模糊匹配
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: " 本地精确匹配中...".to_string(),
+            received_bytes: 0,
+            streaming_content: None,
+        });
+
+        let local_result = self.local_match(app, website_comics, local_comics)?;
+
+        // 分割结果：已匹配 vs 未匹配
+        let local_already_have: Vec<MatchDetail> = local_result.details.iter()
+            .filter(|d| d.match_type == "already_have")
+            .cloned()
+            .collect();
+
+        let unmatched_details: Vec<MatchDetail> = local_result.details.iter()
+            .filter(|d| d.match_type == "need_download")
+            .cloned()
+            .collect();
+
+        let already_have_count = local_already_have.len();
+        let total = website_comics.len();
+        let unmatched_count = unmatched_details.len();
+
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: format!(" 本地匹配完成：{}/{} 已匹配，{} 部待 AI 确认", already_have_count, total, unmatched_count),
+            received_bytes: already_have_count,
+            streaming_content: None,
+        });
+
+        // Phase 2: AI 兜底未匹配的漫画
+        let mut final_details = local_already_have;
+        let mut ai_response: Option<String> = None;
+
+        if !self.api_url.is_empty() && !unmatched_details.is_empty() {
+            let unmatched_website: Vec<Comic> = unmatched_details.iter()
+                .map(|d| d.website.clone())
+                .collect();
+
+            println!(" AI 兜底匹配剩余 {} 部漫画", unmatched_count);
+            let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                message: format!(" AI 匹配剩余 {} 部漫画...", unmatched_count),
+                received_bytes: 0,
+                streaming_content: None,
+            });
+
+            let ai_result = self.match_comics_for_subset(app, &unmatched_website, local_comics).await?;
+            final_details.extend(ai_result.details);
+            ai_response = ai_result.ai_response;
+        } else if self.api_url.is_empty() {
+            println!(" AI API 未配置，仅使用本地匹配结果");
+        } else {
+            println!(" 所有漫画均已本地匹配，无需 AI 兜底");
+            let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                message: " 所有漫画均已匹配，无需 AI 兜底".to_string(),
+                received_bytes: 0,
+                streaming_content: None,
+            });
         }
 
-        // 分批处理（避免 API 请求过大）
-        let batch_size = 20;
-        let mut all_details = vec![];
+        println!(" 对比完成，共 {} 条结果", final_details.len());
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: format!(" 对比完成，共 {} 条结果", final_details.len()),
+            received_bytes: 0,
+            streaming_content: None,
+        });
 
-        for (i, chunk) in website_comics.chunks(batch_size).enumerate() {
-            println!("🔄 正在对比第 {}/{} 批...", i + 1, (website_comics.len() + batch_size - 1) / batch_size);
-            let details = self
-                .match_batch(chunk, local_comics)
-                .await?;
-            all_details.extend(details);
-        }
-
-        println!("✅ AI 匹配完成，共 {} 条结果", all_details.len());
-
-        Ok(all_details)
+        Ok(AiMatchResult {
+            details: final_details,
+            ai_response,
+        })
     }
 
     /// 匹配一批漫画
     async fn match_batch(
         &self,
+        app: &tauri::AppHandle,
         website_batch: &[Comic],
         local_comics: &[LocalComic],
-    ) -> Result<Vec<MatchDetail>, AppError> {
-        // 构建 AI 请求
+    ) -> Result<AiMatchResult, AppError> {
         let prompt = self.build_prompt(website_batch, local_comics);
+        let (response_text, ai_response) = self.call_ai_api(app, &prompt).await?;
+        let details = self.parse_ai_response(&response_text, website_batch, local_comics)?;
+        Ok(AiMatchResult { details, ai_response: Some(ai_response) })
+    }
 
-        // 调用 AI API
-        let response = self.call_ai_api(&prompt).await?;
+    /// 仅对未匹配的漫画子集调用 AI 匹配
+    async fn match_comics_for_subset(
+        &self,
+        app: &tauri::AppHandle,
+        unmatched_website: &[Comic],
+        local_comics: &[LocalComic],
+    ) -> Result<AiMatchResult, AppError> {
+        let total = unmatched_website.len();
+        let batch_count = total.div_ceil(BATCH_SIZE);
+        let mut all_details = vec![];
+        let mut ai_responses = vec![];
 
-        // 解析 AI 响应
-        let details = self.parse_ai_response(&response, website_batch, local_comics)?;
+        for (i, batch) in unmatched_website.chunks(BATCH_SIZE).enumerate() {
+            let batch_num = i + 1;
+            println!(" 处理第 {}/{} 批（{} 部）", batch_num, batch_count, batch.len());
+            let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                message: format!(" 第 {}/{} 批：对比 {} 部漫画", batch_num, batch_count, batch.len()),
+                received_bytes: batch_num * 100,
+                streaming_content: None,
+            });
 
-        Ok(details)
+            let result = self.match_batch(app, batch, local_comics).await?;
+            all_details.extend(result.details);
+            if let Some(resp) = result.ai_response {
+                ai_responses.push(resp);
+            }
+        }
+
+        Ok(AiMatchResult {
+            details: all_details,
+            ai_response: if ai_responses.is_empty() {
+                None
+            } else {
+                Some(ai_responses.join("\n---\n"))
+            },
+        })
     }
 
     /// 构建 AI Prompt
     fn build_prompt(&self, website_comics: &[Comic], local_comics: &[LocalComic]) -> String {
-        let website_list = website_comics
-            .iter()
-            .map(|c| format!("- {} (分类：{})", c.title, c.category))
-            .collect::<Vec<_>>()
-            .join("\n");
+        let website_list: Vec<String> = website_comics.iter().map(|c| c.title.clone()).collect();
+        let local_list: Vec<String> = local_comics.iter().map(|c| c.title.clone()).collect();
 
-        let local_list = local_comics
-            .iter()
-            .map(|c| format!("- {}", c.title))
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        format!(
-            r#"你是一个漫画匹配专家。请对比以下两组漫画数据，找出它们之间的匹配关系。
-
-网站漫画列表（需要下载的）：
-{}
-
-本地漫画列表（已经下载的）：
-{}
-
-匹配规则：
-1. 根据漫画名称判断是否是同一部作品
-2. 考虑名称的变体、翻译差异、简繁体等
-3. 给出每对匹配的置信度（0-1）
-4. 如果本地有匹配的，标记为 "already_have"
-5. 如果本地没有匹配的，标记为 "need_download"
-
-返回 JSON 格式（只返回 JSON，不要其他内容）：
-{{
-  "matches": [
-    {{
-      "website_title": "网站漫画标题",
-      "local_title": "本地漫画标题（如果没有则为 null）",
-      "match_type": "already_have 或 need_download",
-      "confidence": 0.95,
-      "reason": "匹配的简要理由"
-    }}
-  ]
-}}"#,
-            website_list, local_list
-        )
+        self.prompt_template
+            .replace("{website_comics}", &website_list.join("\n"))
+            .replace("{local_comics}", &local_list.join("\n"))
     }
 
-    /// 调用 AI API
-    async fn call_ai_api(&self, prompt: &str) -> Result<String, AppError> {
+    /// 调用 AI API，返回 (解析后的文本, 原始AI响应)
+    async fn call_ai_api(&self, app: &tauri::AppHandle, prompt: &str) -> Result<(String, String), AppError> {
+        // 自动补全 API 地址
+        let api_url = if self.api_url.ends_with("/v1") {
+            format!("{}/chat/completions", self.api_url)
+        } else if !self.api_url.contains("/chat/completions") {
+            format!("{}/chat/completions", self.api_url.trim_end_matches('/'))
+        } else {
+            self.api_url.clone()
+        };
+
+        println!(" 调用 AI API：{}", api_url);
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: " 调用 AI API...".to_string(),
+            received_bytes: 0,
+            streaming_content: None,
+        });
+
         let mut request = self
             .client
-            .post(&self.api_url)
+            .post(&api_url)
             .header("Content-Type", "application/json");
 
-        // 添加 API Key（如果有）
         if let Some(key) = &self.api_key {
             request = request.bearer_auth(key);
         }
 
         let body = json!({
-            "model": "gpt-3.5-turbo",
+            "model": self.model,
             "messages": [
                 {"role": "system", "content": "你是一个专业的漫画匹配助手。"},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.3,
-            "max_tokens": 4000
+            "temperature": self.temperature,
+            "max_tokens": MAX_TOKENS,
+            "stream": true
         });
 
         let response = request.json(&body).send().await?;
-        let json: serde_json::Value = response.json().await?;
 
-        // 提取 AI 回复
-        if let Some(choices) = json.get("choices") {
-            if let Some(first) = choices.as_array().and_then(|a| a.first()) {
-                if let Some(message) = first.get("message") {
-                    if let Some(content) = message.get("content") {
-                        return Ok(content.as_str().unwrap_or("").to_string());
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(AppError::AiError(format!("AI API 请求失败：{} - {}", status, error_text)));
+        }
+
+        let stream_result = self.read_stream_response(response, app).await;
+
+        match stream_result {
+            Ok(ai_response) => {
+                if ai_response.is_empty() {
+                    return Err(AppError::AiError("AI API 返回空响应".to_string()));
+                }
+                return Ok((ai_response.clone(), ai_response));
+            }
+            Err(e) => {
+                println!(" 流式响应读取失败：{}，将尝试非流式请求", e);
+                let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                    message: format!(" 流式响应异常，尝试非流式请求...").to_string(),
+                    received_bytes: 0,
+            streaming_content: None,
+                });
+            }
+        }
+
+        // 重新发送非流式请求
+        let mut request = self
+            .client
+            .post(&api_url)
+            .header("Content-Type", "application/json");
+
+        if let Some(key) = &self.api_key {
+            request = request.bearer_auth(key);
+        }
+
+        let body = json!({
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": "你是一个专业的漫画匹配助手。"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": self.temperature,
+            "max_tokens": MAX_TOKENS
+        });
+
+        let response = request.json(&body).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(AppError::AiError(format!("AI API 请求失败：{} - {}", status, error_text)));
+        }
+
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: " 正在获取 AI 响应...".to_string(),
+            received_bytes: 0,
+            streaming_content: None,
+        });
+
+        let text = response.text().await.map_err(|e| {
+            AppError::AiError(format!("读取响应失败：{}", e))
+        })?;
+
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: " 收到 AI 响应".to_string(),
+            received_bytes: text.len(),
+            streaming_content: None,
+        });
+
+        if text.is_empty() {
+            return Err(AppError::AiError("AI API 返回空响应".to_string()));
+        }
+
+        Ok((text.clone(), text))
+    }
+
+    /// 读取流式响应
+    async fn read_stream_response(&self, response: reqwest::Response, app: &tauri::AppHandle) -> Result<String, AppError> {
+        let mut full_response = String::new();
+        let mut received_bytes = 0;
+
+        let stream = response.bytes_stream();
+
+        tokio::pin!(stream);
+
+        while let Some(chunk) = stream.next().await {
+            let chunk = match chunk {
+                Ok(c) => c,
+                Err(e) => {
+                    println!(" 读取流式 chunk 失败：{}", e);
+                    continue;
+                }
+            };
+
+            let chunk_str = String::from_utf8_lossy(&chunk);
+            let lines: Vec<&str> = chunk_str.split("\n").collect();
+
+            for line in lines {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                if trimmed.starts_with("data: ") {
+                    let json_str = trimmed.strip_prefix("data: ").unwrap_or(trimmed);
+
+                    if json_str == "[DONE]" {
+                        break;
+                    }
+
+                    let json: serde_json::Value = match serde_json::from_str(json_str) {
+                        Ok(j) => j,
+                        Err(e) => {
+                            println!(" 解析 SSE 行失败：{} - {}", e, json_str);
+                            continue;
+                        }
+                    };
+
+                    if let Some(choices) = json.get("choices") {
+                        if let Some(first) = choices.as_array().and_then(|a| a.first()) {
+                            if let Some(delta) = first.get("delta") {
+                                if let Some(content) = delta.get("content") {
+                                    let content_str = content.as_str().unwrap_or("");
+                                    full_response.push_str(content_str);
+                                    received_bytes += content_str.len();
+
+                                    if received_bytes % 100 < content_str.len() {
+                                        println!(" AI 响应中... ({})", received_bytes);
+
+                                        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                                            message: format!(" AI 响应中... {} 字符", received_bytes),
+                                            received_bytes,
+                                            streaming_content: Some(content_str.to_string()),
+                                        });
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        Err(AppError::AiError("AI API 响应格式不正确".to_string()))
+        println!(" AI 响应完成，共 {} 字符", full_response.len());
+
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: format!(" AI 响应完成，共 {} 字符", full_response.len()),
+            received_bytes: full_response.len(),
+            streaming_content: None,
+        });
+
+        Ok(full_response)
     }
 
     /// 解析 AI 响应
@@ -205,13 +437,37 @@ impl AiMatcher {
         website_comics: &[Comic],
         local_comics: &[LocalComic],
     ) -> Result<Vec<MatchDetail>, AppError> {
-        // 提取 JSON（可能包含在 markdown 代码块中）
         let json_str = Self::extract_json(response)?;
 
-        // 解析 JSON
-        let json: serde_json::Value = serde_json::from_str(&json_str)?;
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&json_str) {
+            return self.parse_json_value(json, website_comics, local_comics);
+        }
 
-        // 构建本地漫画映射
+        println!(" JSON 解析不完整，尝试修复...");
+        if let Some(fixed_json) = Self::fix_incomplete_json(&json_str) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&fixed_json) {
+                return self.parse_json_value(json, website_comics, local_comics);
+            }
+        }
+
+        println!(" JSON 解析失败，尝试从文本中提取匹配信息...");
+        let details = Self::extract_matches_from_text(response, website_comics, local_comics);
+
+        if !details.is_empty() {
+            println!(" 从文本中提取到 {} 条匹配", details.len());
+            return Ok(details);
+        }
+
+        Err(AppError::AiError("无法解析 AI 响应".to_string()))
+    }
+
+    /// 解析 JSON 值
+    fn parse_json_value(
+        &self,
+        json: serde_json::Value,
+        website_comics: &[Comic],
+        local_comics: &[LocalComic],
+    ) -> Result<Vec<MatchDetail>, AppError> {
         let local_map: HashMap<String, &LocalComic> = local_comics
             .iter()
             .map(|c| (c.title.clone(), c))
@@ -246,7 +502,6 @@ impl AiMatcher {
                     .unwrap_or("")
                     .to_string();
 
-                // 找到对应的网站漫画
                 if let Some(website) = website_comics.iter().find(|c| c.title == website_title) {
                     let local = local_title
                         .and_then(|t| local_map.get(t))
@@ -264,7 +519,6 @@ impl AiMatcher {
             }
         }
 
-        // 补充未匹配的漫画
         let matched_titles: Vec<String> = details
             .iter()
             .map(|d| d.website.title.clone())
@@ -286,14 +540,125 @@ impl AiMatcher {
         Ok(details)
     }
 
+    /// 修复不完整的 JSON
+    fn fix_incomplete_json(json_str: &str) -> Option<String> {
+        let trimmed = json_str.trim();
+
+        let open_braces = trimmed.matches('{').count();
+        let close_braces = trimmed.matches('}').count();
+        let open_brackets = trimmed.matches('[').count();
+        let close_brackets = trimmed.matches(']').count();
+
+        let mut result = trimmed.to_string();
+
+        for _ in 0..open_brackets.saturating_sub(close_brackets) {
+            result.push_str("]");
+        }
+
+        for _ in 0..open_braces.saturating_sub(close_braces) {
+            result.push('}');
+        }
+
+        if serde_json::from_str::<serde_json::Value>(&result).is_ok() {
+            return Some(result);
+        }
+
+        let last_complete_object = result.rfind("},").or(result.rfind('}'));
+        if let Some(pos) = last_complete_object {
+            let truncated = &result[..=pos];
+            if serde_json::from_str::<serde_json::Value>(truncated).is_ok() {
+                let mut fixed = truncated.to_string();
+                for _ in 0..open_brackets.saturating_sub(close_brackets) {
+                    fixed.push_str("]");
+                }
+                return Some(fixed);
+            }
+        }
+
+        None
+    }
+
+    /// 从文本中提取匹配信息
+    fn extract_matches_from_text(
+        response: &str,
+        website_comics: &[Comic],
+        local_comics: &[LocalComic],
+    ) -> Vec<MatchDetail> {
+        let mut details = vec![];
+
+        let patterns = [
+            r#""website_title"\s*:\s*"([^"]+)""#,
+            r#"网站[:：]\s*([^\n，,]+)"#,
+        ];
+
+        let mut extracted_website_titles = Vec::new();
+
+        for pattern in &patterns {
+            if let Ok(re) = regex::Regex::new(pattern) {
+                for cap in re.captures_iter(response) {
+                    if let Some(title) = cap.get(1) {
+                        let title_str = title.as_str().trim();
+                        if !title_str.is_empty() {
+                            extracted_website_titles.push(title_str.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        for website_title in extracted_website_titles {
+            if let Some(website) = website_comics.iter().find(|c|
+                c.title.contains(&website_title) || website_title.contains(&c.title)
+            ) {
+                let local_title = Self::find_local_title_in_response(response, &website.title, local_comics);
+
+                details.push(MatchDetail {
+                    website: website.clone(),
+                    local: local_title.clone(),
+                    match_type: if local_title.is_some() { "already_have".to_string() } else { "need_download".to_string() },
+                    confidence: if local_title.is_some() { 0.85 } else { 0.0 },
+                    reason: if local_title.is_some() { "AI 文本匹配".to_string() } else { "无法确定本地匹配".to_string() },
+                    algorithm: "AI".to_string(),
+                });
+            }
+        }
+
+        details
+    }
+
+    /// 从响应文本中找到关联的本地标题
+    fn find_local_title_in_response(
+        response: &str,
+        _website_title: &str,
+        local_comics: &[LocalComic],
+    ) -> Option<LocalComic> {
+        let local_patterns = [
+            r#""local_title"\s*:\s*"([^"]+)""#,
+            r#"本地[:：]\s*([^\n，,]+)"#,
+        ];
+
+        for pattern in &local_patterns {
+            if let Ok(re) = regex::Regex::new(pattern) {
+                for cap in re.captures_iter(response) {
+                    if let Some(title) = cap.get(1) {
+                        let title_str = title.as_str().trim();
+                        if let Some(local) = local_comics.iter().find(|c| c.title == title_str) {
+                            return Some(local.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     /// 从响应中提取 JSON
     fn extract_json(response: &str) -> Result<String, AppError> {
-        // 尝试直接解析
         if response.trim().starts_with('{') {
             return Ok(response.trim().to_string());
         }
 
-        // 尝试从 markdown 代码块中提取
         if let Some(start) = response.find("```json") {
             let start = start + 7;
             if let Some(end) = response[start..].find("```") {
@@ -301,7 +666,6 @@ impl AiMatcher {
             }
         }
 
-        // 尝试找到第一个 { 和最后一个 }
         if let Some(start) = response.find('{') {
             if let Some(end) = response.rfind('}') {
                 return Ok(response[start..=end].to_string());
@@ -312,21 +676,32 @@ impl AiMatcher {
     }
 
     /// 本地相似度匹配（不使用 AI API）
-    async fn local_match(
+    fn local_match(
         &self,
+        app: &tauri::AppHandle,
         website_comics: &[Comic],
         local_comics: &[LocalComic],
-    ) -> Result<Vec<MatchDetail>, AppError> {
+    ) -> Result<AiMatchResult, AppError> {
         println!(" 使用本地相似度算法进行匹配");
-        
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: " 使用本地相似度算法进行匹配...".to_string(),
+            received_bytes: 0,
+            streaming_content: None,
+        });
+
         let mut details = vec![];
         let mut matched_local: Vec<String> = vec![];
 
-        for website in website_comics {
+        for (idx, website) in website_comics.iter().enumerate() {
+            let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+                message: format!(" 本地匹配进度：{}/{}", idx + 1, website_comics.len()),
+                received_bytes: idx + 1,
+            streaming_content: None,
+            });
+
             let mut best_match: Option<&LocalComic> = None;
             let mut best_score = 0.0;
 
-            // 清理网站漫画标题前缀
             let clean_website_title = Self::clean_title_prefix(&website.title);
 
             for local in local_comics {
@@ -334,7 +709,6 @@ impl AiMatcher {
                     continue;
                 }
 
-                // 清理本地漫画标题前缀
                 let clean_local_title = Self::clean_title_prefix(&local.title);
 
                 let score = Self::calculate_similarity(&clean_website_title, &clean_local_title);
@@ -358,7 +732,7 @@ impl AiMatcher {
                 } else {
                     details.push(MatchDetail {
                         website: website.clone(),
-                        local: None,
+                        local: Some(local.clone()),
                         match_type: "need_download".to_string(),
                         confidence: best_score,
                         reason: format!("相似度不足 ({:.0}% < {:.0}%)", best_score * 100.0, self.match_threshold * 100.0),
@@ -377,8 +751,13 @@ impl AiMatcher {
             }
         }
 
-        println!("✅ 本地匹配完成，共 {} 条结果", details.len());
-        Ok(details)
+        println!(" 本地匹配完成，共 {} 条结果", details.len());
+        let _ = crate::events::emit_ai_progress(app, AiProgressEvent {
+            message: format!(" 本地匹配完成，共 {} 条结果", details.len()),
+            received_bytes: details.len(),
+            streaming_content: None,
+        });
+        Ok(AiMatchResult { details, ai_response: None })
     }
 
     /// 计算两个字符串的相似度（基于编辑距离）
@@ -393,23 +772,20 @@ impl AiMatcher {
         let s1_lower = s1.to_lowercase();
         let s2_lower = s2.to_lowercase();
 
-        // 完全匹配
         if s1_lower == s2_lower {
             return 1.0;
         }
 
-        // 包含关系
         if s1_lower.contains(&s2_lower) || s2_lower.contains(&s1_lower) {
             let min_len = s1_lower.len().min(s2_lower.len()) as f64;
             let max_len = s1_lower.len().max(s2_lower.len()) as f64;
             return min_len / max_len * 0.9;
         }
 
-        // 编辑距离相似度
         let distance = Self::levenshtein_distance(&s1_lower, &s2_lower);
         let max_len = s1_lower.len().max(s2_lower.len()) as f64;
         let similarity = 1.0 - (distance as f64 / max_len);
-        
+
         similarity.max(0.0)
     }
 

@@ -45,14 +45,15 @@ impl Comparer {
         );
 
         // AI 匹配
-        let match_details = self
+        let match_result = self
             .ai_matcher
-            .match_comics(&website_comics, &local_comics)
+            .match_comics(app, &website_comics, &local_comics)
             .await?;
 
         // 统计结果
         let website_count = website_comics.len() as u32;
         let local_count = local_comics.len() as u32;
+        let match_details = match_result.details;
         let already_have = match_details
             .iter()
             .filter(|d| d.match_type == "already_have")
@@ -68,6 +69,7 @@ impl Comparer {
             to_download,
             already_have,
             match_details,
+            ai_response: match_result.ai_response,
         };
 
         println!(

@@ -52,8 +52,44 @@
         <input
           v-model="config.ai_api_url"
           type="text"
-          placeholder="https://api.openai.com/v1/chat/completions"
+          placeholder="https://coding.dashscope.aliyuncs.com/v1/chat/completions"
         />
+      </div>
+      <div class="form-group">
+        <label>AI API Key：</label>
+        <input
+          v-model="config.ai_api_key"
+          type="password"
+          placeholder="sk-..."
+        />
+      </div>
+      <div class="form-group">
+        <label>AI 模型：</label>
+        <input
+          v-model="config.ai_model"
+          type="text"
+          placeholder="qwen3.5-plus"
+        />
+      </div>
+      <div class="form-group">
+        <label>AI Prompt 模板：</label>
+        <textarea
+          v-model="config.ai_prompt"
+          rows="8"
+          placeholder="你是一个专业的漫画匹配助手..."
+        ></textarea>
+      </div>
+      <div class="form-group">
+        <label>AI 温度参数：</label>
+        <input
+          v-model.number="config.ai_temperature"
+          type="number"
+          step="0.1"
+          min="0"
+          max="2"
+          placeholder="0（关闭推理）"
+        />
+        <span class="hint">0 = 确定性输出（无推理），2 = 高随机性</span>
       </div>
       <div class="form-group">
         <label>匹配阈值：</label>
@@ -132,7 +168,8 @@ h3 {
 }
 
 .form-group input[type='text'],
-.form-group input[type='number'] {
+.form-group input[type='number'],
+.form-group textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color);
@@ -140,6 +177,11 @@ h3 {
   font-size: 14px;
   background: var(--bg-primary);
   color: var(--text-primary);
+}
+
+.form-group textarea {
+  font-family: monospace;
+  resize: vertical;
 }
 
 .form-actions {

@@ -6,24 +6,35 @@ import { listen } from '@tauri-apps/api/event';
 
 export function useCompare() {
   const isComparing = ref(false);
-  const progress = ref(0);
-  const total = ref(0);
   const result = ref<any>(null);
   const error = ref('');
+  const aiLog = ref<string[]>([]);
+  const aiStreamingContent = ref('');
 
-  let unlisten: (() => void) | null = null;
+  let unlistenAiProgress: (() => void) | null = null;
 
   async function compare(searchFile: string, localPath: string) {
     isComparing.value = true;
     error.value = '';
-    progress.value = 0;
+    aiLog.value = [];
+    aiStreamingContent.value = '';
 
     try {
-      // 监听对比进度
-      unlisten = await listen('compare_progress', (event: any) => {
-        const { current, total: t } = event.payload;
-        progress.value = current;
-        total.value = t;
+      // 监听 AI 流式进度
+      unlistenAiProgress = await listen('ai_progress', (event: any) => {
+        const { message, received_bytes: _bytes, streaming_content } = event.payload;
+
+        // 添加日志消息
+        if (message) {
+          aiLog.value.push(message);
+        }
+
+        // 累积流式内容（用于显示 AI 生成的实时文字）
+        if (streaming_content) {
+          aiStreamingContent.value += streaming_content;
+        }
+
+        console.log('AI 进度:', message, '内容:', streaming_content || '');
       });
 
       // 调用 Tauri Command
@@ -49,21 +60,21 @@ export function useCompare() {
   }
 
   function cleanup() {
-    if (unlisten) {
-      unlisten();
-      unlisten = null;
+    if (unlistenAiProgress) {
+      unlistenAiProgress();
+      unlistenAiProgress = null;
     }
     isComparing.value = false;
-    progress.value = 0;
-    total.value = 0;
+    aiLog.value = [];
+    aiStreamingContent.value = '';
     result.value = null;
     error.value = '';
   }
 
   return {
     isComparing,
-    progress,
-    total,
+    aiLog,
+    aiStreamingContent,
     result,
     error,
     compare,

@@ -37,7 +37,6 @@
 │  │   ├── scanner/        # 扫描模块                  │ │
 │  │   └── ai/             # AI 匹配模块               │ │
 │  │   ├── config/           # 配置管理                  │ │
-│  │   └── utils/            # 工具函数                  │ │
 │  └───────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────┘
 ```
@@ -53,7 +52,6 @@
 │   ├── types/                    # 类型定义
 │   ├── App.vue                   # 主组件
 │   └── main.ts                   # 入口
-│
 ├── dist/                         # 构建产物
 │
 ├── scripts/                      # 脚本目录
@@ -67,8 +65,7 @@
 │   │   │   ├── search.rs         # 搜索命令（Playwright）
 │   │   │   ├── compare.rs        # 对比命令
 │   │   │   ├── download.rs       # 下载命令
-│   │   │   ├── config.rs         # 配置命令
-│   │   │   └── cloudflare.rs     # Cloudflare 验证处理
+│   │   │   └── config.rs         # 配置命令
 │   │   ├── core/                 # 核心业务逻辑
 │   │   │   ├── mod.rs
 │   │   │   ├── scraper/          # 爬虫（旧方案，保留代码）
@@ -103,12 +100,7 @@
 ```
 src/
 ├── components/                  # 可复用组件
-│   ├── Sidebar.vue             # 侧边栏导航
-│   ├── ComicCard.vue           # 漫画卡片
-│   ├── StatCard.vue            # 统计卡片
-│   ├── QueueItem.vue           # 队列项
-│   ├── DownloadProgress.vue    # 下载进度
-│   └── ...
+│   └── Sidebar.vue             # 侧边栏导航
 │
 ├── views/                       # 页面组件
 │   ├── SearchView.vue          # 搜索页面
@@ -120,12 +112,14 @@ src/
 │   ├── useSearch.ts            # 搜索逻辑
 │   ├── useDownload.ts          # 下载逻辑
 │   ├── useCompare.ts           # 对比逻辑
-│   └── useConfig.ts            # 配置逻辑
+│   ├── useConfig.ts            # 配置逻辑
+│   └── useDownloadQueue.ts     # 下载队列逻辑
 │
-└── styles/                      # 样式
-    ├── variables.css           # CSS 变量（亮色/暗色）
-    ├── base.css                # 基础样式
-    └── components.css          # 组件样式
+├── types/                       # 类型定义
+│   └── index.ts
+│
+├── App.vue                     # 主组件
+└── main.ts                     # 入口
 ```
 
 ### 2.3 状态管理
@@ -247,15 +241,14 @@ impl Downloader {
 // core/comparer/mod.rs
 pub struct Comparer {
     ai_matcher: AiMatcher,
-    scanner: Scanner,
 }
 
 impl Comparer {
-    pub async fn compare(&self, search_file: &str, local_path: &str) -> Result<CompareResult> {
-        // 1. 读取搜索结果
-        // 2. 扫描本地文件夹
-        // 3. AI 匹配
-        // 4. 生成对比结果
+    pub async fn compare(&self, app: &AppHandle, website_comics: &[Comic], local_path: &str) -> Result<CompareResult> {
+        // 1. 扫描本地文件夹
+        // 2. 本地精确/模糊匹配全部网站漫画
+        // 3. 仅对未匹配的漫画调用 AI API
+        // 4. 合并结果，生成对比
     }
 }
 ```
@@ -270,20 +263,28 @@ pub struct AiMatcher {
 }
 
 impl AiMatcher {
-    pub async fn match_comics(&self, website_name: &str, local_names: &[String]) -> Result<MatchResult> {
-        // 1. 调用远程 API（OpenAI 兼容接口）
-        // 2. 解析响应
-        // 3. 计算相似度
-        // 4. 返回匹配结果
+    // Phase 1: 本地精确/模糊匹配（同步，无网络）
+    fn local_match(&self, website_comics: &[Comic], local_comics: &[LocalComic]) -> Result<AiMatchResult> {
+        // 1. 标题前缀清洗
+        // 2. 精确匹配 → 包含关系 → Levenshtein 距离
+        // 3. 置信度 >= threshold 标记为 already_have
+    }
+
+    // Phase 2: AI 仅兜底未匹配的漫画
+    async fn match_comics_for_subset(&self, unmatched: &[Comic], local: &[LocalComic]) -> Result<AiMatchResult> {
+        // 1. 分批发送未匹配漫画（每批 20 部）
+        // 2. SSE 流式输出，前端实时显示
+        // 3. 解析 AI JSON 响应
     }
 }
 ```
 
 **关键特性**：
-- 远程 API 调用（优先）
-- 相似度计算
-- 缓存机制
-- 预留本地模型接口（后续实现）
+- 两阶段匹配：本地精确/模糊匹配优先，AI 仅兜底未匹配漫画
+- Levenshtein 距离 + 标题前缀清洗（去除 `[TYPE.90]`、`[中国翻訳]` 等）
+- AI 调用分批处理（每批 20 部），SSE 流式输出
+- 前端实时显示 AI 流式内容（`streaming_content` 字段）
+- 全部本地匹配时跳过 AI，零 API 调用
 
 #### 3.2.5 扫描器模块（scanner）
 
@@ -337,19 +338,31 @@ impl Config {
 
 ### 3.4 事件系统
 
+`events.rs` 使用独立结构体定义事件（不使用枚举）：
+
 ```rust
-// events.rs
-pub enum AppEvent {
-    SearchProgress { current: u32, total: u32 },
-    DownloadProgress { task_id: String, progress: f64 },
-    CompareProgress { current: u32, total: u32 },
-    DownloadComplete { success: u32, failed: u32 },
-    Error { message: String },
+// events.rs — 独立 struct，各有对应的 emit 函数
+pub struct SearchProgressEvent {
+    current: u32, total: u32, found_count: u32,
+}
+pub struct DownloadProgressEvent {
+    task_id: String, progress: f64, speed: f64, eta: u32,
+}
+pub struct CompareProgressEvent {
+    current: u32, total: u32,
+}
+pub struct AiProgressEvent {
+    message: String, received_bytes: usize,
+    streaming_content: Option<String>,
+}
+pub struct DownloadCompleteEvent {
+    success: u32, failed: u32,
+}
+pub struct ErrorEvent {
+    message: String,
 }
 
-pub fn emit_event(app: &AppHandle, event: AppEvent) {
-    // 通过 Tauri Events 推送到前端
-}
+// 通过 app.emit("event_name", event) 推送到前端
 ```
 
 ---
@@ -549,7 +562,7 @@ fn send_notification(app: &AppHandle, title: &str, body: &str) {
 ### 6.3 对比流程
 
 ```
-前端选择搜索结果
+前端选择搜索结果 + 本地文件夹
   ↓
 调用 compare_comics Command
   ↓
@@ -557,15 +570,19 @@ fn send_notification(app: &AppHandle, title: &str, body: &str) {
   ↓
 扫描本地文件夹
   ↓
-发送 compare_progress Event
+Phase 1: 本地精确/模糊匹配（Levenshtein + 前缀清洗）
   ↓
-AI 匹配（远程 API）
+发送 ai_progress Event（本地匹配进度）
   ↓
-生成对比结果
+Phase 2: 仅对未匹配的漫画调用 AI API（SSE 流式输出）
   ↓
-返回结果到前端
+发送 ai_progress Event（AI 流式内容 streaming_content）
   ↓
-前端显示对比结果
+合并本地 + AI 匹配结果
+  ↓
+返回对比结果到前端
+  ↓
+前端显示对比结果（区分「本地」和「AI」算法标签）
 ```
 
 ---
@@ -618,10 +635,9 @@ try {
 - 内存优化（流式处理）
 
 ### 8.2 前端优化
-- 图片懒加载
-- 虚拟滚动（大量数据时）
-- 组件按需加载
-- 防抖/节流
+- 组件内联渲染（无独立组件文件，样式使用 `<style scoped>`）
+- Vue `<style scoped>` 避免样式污染
+- 图片固定尺寸 `object-fit: cover` 避免布局抖动
 
 ### 8.3 缓存策略
 - 搜索结果持久化存储（程序目录 cache/ JSON 文件，每次搜索重新爬取）
@@ -651,5 +667,5 @@ try {
 
 **文档结束**
 
-**最后更新**: 2026-04-26  
+**最后更新**: 2026-05-14  
 **版本**: v4.0（纯桌面端重构版）

@@ -78,6 +78,7 @@ export interface CompareResult {
   to_download: number;
   already_have: number;
   match_details: MatchDetail[];
+  ai_response?: string | null;
 }
 
 // 匹配详情
@@ -88,6 +89,14 @@ export interface MatchDetail {
   confidence: number;
   reason: string;
   algorithm: string;
+}
+
+// 对比历史条目（持久化存储）
+export interface CompareHistoryEntry {
+  keyword: string;
+  local_path: string;
+  compared_at: string;
+  result: CompareResult;
 }
 
 // 配置结构
@@ -103,6 +112,9 @@ export interface AppConfig {
   retry_interval: number;
   ai_api_url: string;
   ai_api_key: string | null;
+  ai_model: string;
+  ai_prompt: string;
+  ai_temperature: number;
   match_threshold: number;
   theme: string;
 }

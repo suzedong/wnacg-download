@@ -50,7 +50,8 @@ cargo build --release    # 发布构建
 |---|---|
 | `get_config`、`save_config`、`reset_config` | 配置管理 |
 | `search_comics` | 为每页派生 Node.js Playwright 脚本，并行执行 |
-| `compare_comics` | 读取缓存的搜索结果，扫描本地文件夹，AI 匹配标题 |
+| `compare_comics` | 读取缓存的搜索结果，扫描本地文件夹，本地优先匹配 + AI 兜底标题匹配 |
+| `save_compare_result`、`load_compare_result` | 对比结果持久化（保存/加载历史对比记录） |
 | `start_download` | 并发批量下载，支持重试和断点续传 |
 | `window_minimize`、`window_maximize`、`window_close` | 窗口控制 |
 
@@ -68,7 +69,7 @@ cargo build --release    # 发布构建
   - **downloader/** — 并发下载器，使用 `tokio::sync::Semaphore` 控制并发数，支持重试和断点续传
   - **comparer/** — 协调本地扫描和 AI 匹配
   - **scanner/** — 扫描本地文件夹中的漫画（ZIP/RAR/CBZ/CBR/7z 压缩包，或包含 3 张以上图片的文件夹）
-  - **ai/** — AiMatcher 双模式：OpenAI 兼容 API（每批 20 条）或本地 Levenshtein 距离回退方案
+  - **ai/** — AiMatcher 两阶段匹配：先本地精确/模糊匹配（Levenshtein + 前缀清洗），AI 仅兜底未匹配的漫画（每批 20 条，SSE 流式输出）
   - **scraper/** — 遗留的 HTTP 爬虫（reqwest + scraper），标记为 `#[allow(dead_code)]`；**当前未使用**，实际搜索使用 Playwright
 - [config.rs](src-tauri/src/config.rs) — 配置文件位于 `{exe_dir}/config/config.json`
 - [events.rs](src-tauri/src/events.rs) — 事件结构体定义
@@ -81,7 +82,7 @@ cargo build --release    # 发布构建
 
 ### 配置
 
-存储路径：`{exe_dir}/config/config.json`。主要字段：`storage_path`（存储路径）、`proxy`/`proxy_enabled`（代理）、`max_pages`（最大页数）、`request_interval`（请求间隔）、`search_chinese_only`（仅中文搜索）、`concurrent_downloads`（并发下载数，默认 3）、`retry_times`（重试次数，默认 3）、`retry_interval`（重试间隔，默认 30 秒）、`ai_api_url`、`ai_api_key`、`match_threshold`（匹配阈值，默认 0.8）、`theme`（主题：light/dark）。
+存储路径：`{exe_dir}/config/config.json`。主要字段：`storage_path`（存储路径）、`proxy`/`proxy_enabled`（代理）、`max_pages`（最大页数）、`request_interval`（请求间隔）、`search_chinese_only`（仅中文搜索）、`concurrent_downloads`（并发下载数，默认 3）、`retry_times`（重试次数，默认 3）、`retry_interval`（重试间隔，默认 30 秒）、`ai_api_url`、`ai_api_key`、`ai_model`（AI 模型名称）、`ai_prompt`（AI Prompt 模板）、`ai_temperature`（AI 温度，默认 0.0）、`match_threshold`（匹配阈值，默认 0.8）、`theme`（主题：light/dark）。
 
 ### 缓存
 
@@ -149,12 +150,12 @@ cargo build --release    # 发布构建
 - 下载完成后校验文件完整性
 
 ### AI 匹配规则
-- 使用 AI 模型进行漫画名智能匹配，提高对比准确性
-- 支持远程 API 调用（OpenAI 兼容接口）
-- 内置增强的相似度计算算法，处理漫画名的变体
-- **启用缓存机制**，提高匹配性能
+- **两阶段匹配流程**：
+  1. **本地优先**：Levenshtein 距离 + 标题前缀清洗（去除 `[TYPE.90]` 等），置信度 >= match_threshold 即标记为已拥有
+  2. **AI 兜底**：仅对本地未匹配的漫画调用 AI API（OpenAI 兼容接口，SSE 流式输出），减少 API 调用
+- 前端实时显示 AI 流式输出内容（`ai_progress` 事件的 `streaming_content` 字段）
 - 匹配阈值可通过配置调整，默认为 0.8
-- 本地模型支持（后续实现）
+- 全部本地匹配时跳过 AI，零 API 调用
 
 ---
 
@@ -416,5 +417,5 @@ alert('Download complete!');
 
 ---
 
-**最后更新**: 2026-05-13  
+**最后更新**: 2026-05-14  
 **版本**: v4.0（纯桌面端重构版）

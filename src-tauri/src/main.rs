@@ -97,6 +97,9 @@ fn main() {
             commands::search::search_comics,
             // 对比命令（Phase 3 实现）
             commands::compare::compare_comics,
+            commands::compare::save_compare_result,
+            commands::compare::load_compare_result,
+            commands::compare::get_download_info,
             // 下载命令（Phase 3 实现）
             commands::download::start_download,
             // 窗口控制

@@ -20,6 +20,7 @@ export function useDownload() {
       retry_interval: number;
       proxy: string | null;
       proxy_enabled: boolean;
+      storage_path: string;
     }
   ) {
     isDownloading.value = true;
@@ -48,11 +49,14 @@ export function useDownload() {
       // 调用 Tauri Command
       const downloadResult = await invoke('start_download', {
         tasks,
-        concurrent: config.concurrent,
-        retryTimes: config.retry_times,
-        retryInterval: config.retry_interval,
-        proxy: config.proxy,
-        proxyEnabled: config.proxy_enabled,
+        options: {
+          concurrent: config.concurrent,
+          retry_times: config.retry_times,
+          retry_interval: config.retry_interval,
+          proxy: config.proxy,
+          proxy_enabled: config.proxy_enabled,
+          storage_path: config.storage_path,
+        },
       });
 
       result.value = downloadResult;
@@ -60,8 +64,17 @@ export function useDownload() {
       await unlistenProgress();
       await unlistenComplete();
     } catch (e: any) {
-      error.value = e.message || '下载失败';
-      console.error('下载失败：', e);
+      // Tauri 错误可能是字符串或对象
+      let errorMsg = '下载失败';
+      if (typeof e === 'string') {
+        errorMsg = e;
+      } else if (e?.message) {
+        errorMsg = e.message;
+      } else if (e) {
+        errorMsg = JSON.stringify(e);
+      }
+      error.value = errorMsg;
+      console.error('下载失败：', errorMsg);
     } finally {
       isDownloading.value = false;
     }
