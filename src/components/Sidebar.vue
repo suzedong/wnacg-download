@@ -13,16 +13,16 @@
     </nav>
 
     <div class="sidebar-footer">
-      <button class="theme-toggle" @click="toggleTheme">
-        <span class="nav-icon">{{ isDark ? '☀️' : '🌙' }}</span>
-        <span class="nav-text">{{ isDark ? '亮色' : '暗色' }}</span>
+      <button class="theme-toggle" @click="cycleTheme">
+        <span class="nav-icon">{{ themeIcon }}</span>
+        <span class="nav-text">{{ themeLabel }}</span>
       </button>
     </div>
   </aside>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useConfig } from '../composables/useConfig';
 
 const props = defineProps({
@@ -35,7 +35,12 @@ const props = defineProps({
 const emit = defineEmits(['view-change']);
 
 const { config, loadConfig, saveConfig } = useConfig();
+// theme 可选值：'light' | 'dark' | 'auto'
+const themeMode = ref('auto');
+// 实际解析后的暗色状态
 const isDark = ref(false);
+// 系统主题监听器
+const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
 const navItems = [
   { id: 'search', icon: '🔍', label: '搜索' },
@@ -48,28 +53,76 @@ function selectView(viewId) {
   emit('view-change', viewId);
 }
 
-async function toggleTheme() {
-  isDark.value = !isDark.value;
+// 根据系统主题更新实际暗色状态
+function applySystemTheme() {
+  isDark.value = systemThemeQuery.matches;
   document.documentElement.setAttribute(
     'data-theme',
     isDark.value ? 'dark' : 'light'
   );
-
-  if (config.value) {
-    config.value.theme = isDark.value ? 'dark' : 'light';
-    await saveConfig(config.value);
-  }
 }
 
-onMounted(async () => {
-  await loadConfig();
-  if (config.value) {
-    isDark.value = config.value.theme === 'dark';
+// 应用当前主题模式
+function applyTheme() {
+  if (themeMode.value === 'auto') {
+    applySystemTheme();
+  } else {
+    isDark.value = themeMode.value === 'dark';
     document.documentElement.setAttribute(
       'data-theme',
       isDark.value ? 'dark' : 'light'
     );
   }
+}
+
+// 系统主题变化回调
+function onSystemThemeChange(e) {
+  if (themeMode.value === 'auto') {
+    isDark.value = e.matches;
+    document.documentElement.setAttribute(
+      'data-theme',
+      isDark.value ? 'dark' : 'light'
+    );
+  }
+}
+
+// 切换主题：auto → dark → light → auto 循环
+async function cycleTheme() {
+  if (themeMode.value === 'auto') {
+    themeMode.value = 'dark';
+  } else if (themeMode.value === 'dark') {
+    themeMode.value = 'light';
+  } else {
+    themeMode.value = 'auto';
+  }
+  applyTheme();
+
+  if (config.value) {
+    config.value.theme = themeMode.value;
+    await saveConfig(config.value);
+  }
+}
+
+// 按钮图标
+const themeIcon = computed(() => {
+  if (themeMode.value === 'auto') return '🖥️';
+  return isDark.value ? '☀️' : '🌙';
+});
+
+// 按钮文字
+const themeLabel = computed(() => {
+  if (themeMode.value === 'auto') return '跟随系统';
+  return isDark.value ? '亮色' : '暗色';
+});
+
+onMounted(async () => {
+  await loadConfig();
+  if (config.value) {
+    themeMode.value = config.value.theme || 'auto';
+  }
+  applyTheme();
+
+  systemThemeQuery.addEventListener('change', onSystemThemeChange);
 });
 </script>
 

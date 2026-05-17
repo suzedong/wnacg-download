@@ -116,6 +116,7 @@ export interface AppConfig {
   ai_prompt: string;
   ai_temperature: number;
   match_threshold: number;
+  /// 主题：light | dark | auto（跟随系统）
   theme: string;
   /// 下载源优先策略：server2 | worker_api | auto
   download_source_preference: string;

@@ -252,7 +252,7 @@ pub mod config {
         pub ai_temperature: f64,
         /// 匹配阈值
         pub match_threshold: f64,
-        /// 主题（light/dark）
+        /// 主题（light/dark/auto）
         pub theme: String,
         /// 下载源优先策略：server2 | worker_api | auto
         #[serde(default)]
@@ -277,7 +277,7 @@ pub mod config {
                 ai_prompt: "你是一个专业的漫画匹配助手。请对比以下网站漫画和本地漫画，判断哪些是相同的漫画（可能标题略有不同）。\n\n网站漫画列表：\n{website_comics}\n\n本地漫画列表：\n{local_comics}\n\n请返回 JSON 格式结果，包含：\n- website_title: 网站漫画标题\n- local_title: 匹配的本地漫画标题（如无匹配则为 null）\n- match_type: \"already_have\" 或 \"need_download\"\n- confidence: 匹配置信度 (0-1)\n- reason: 匹配原因".to_string(),
                 ai_temperature: 0.0,
                 match_threshold: 0.8,
-                theme: "light".to_string(),
+                theme: "auto".to_string(),
                 download_source_preference: "server2".to_string(),
             }
         }

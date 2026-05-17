@@ -59,6 +59,16 @@
         <input v-model.number="config.retry_interval" type="number" />
       </div>
 
+      <h3>外观设置</h3>
+      <div class="form-group">
+        <label>主题模式：</label>
+        <select v-model="config.theme" class="theme-select">
+          <option value="auto">🖥️ 跟随系统（自动切换）</option>
+          <option value="dark">🌙 暗色模式</option>
+          <option value="light">☀️ 亮色模式</option>
+        </select>
+      </div>
+
       <h3>AI 设置</h3>
       <div class="form-group">
         <label>AI API 地址：</label>
@@ -227,6 +237,10 @@ h3 {
 }
 
 .source-select {
+  cursor: pointer;
+}
+
+.theme-select {
   cursor: pointer;
 }
 
