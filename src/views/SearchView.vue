@@ -4,6 +4,7 @@
 
     <div class="search-form">
       <input
+        ref="searchInput"
         v-model="keyword"
         type="text"
         placeholder="输入作者名或关键字..."
@@ -80,6 +81,9 @@
       <div class="progress-text">搜索进度：{{ progress }}/{{ total }}</div>
     </div>
 
+    <!-- 搜索历史加载中 -->
+    <Skeleton v-if="isSearching && results.length === 0" height="200px" />
+
     <div v-if="error" class="error">
       {{ error }}
     </div>
@@ -148,15 +152,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue';
+import { ref, onMounted, inject, watch } from 'vue';
 import { useSearch } from '../composables/useSearch';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
+import Skeleton from '../components/Skeleton.vue';
 import { Comic } from '../types/index';
 import { readDir, readTextFile, remove, stat } from '@tauri-apps/plugin-fs';
 import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-shell';
 
 const keyword = ref('');
+const searchInput = ref(null);
 const selectAll = ref(false);
 const selectedComics = ref<string[]>([]);
 const searchHistory = ref<any[]>([]);
@@ -169,9 +175,21 @@ const { results, isSearching, progress, total, error, search } = useSearch();
 const { addToQueue } = useDownloadQueue();
 
 // 全局通知
-const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
+const notify = inject<{ success: (msg: string) => void; error: (msg: string, duration?: number, action?: { label: string; onClick: () => void }) => void; info: (msg: string) => void }>('notify');
+
+// 搜索失败时弹出 Toast 通知（带重试按钮）
+let lastSearchError = '';
+watch(error, (newError) => {
+  if (newError && newError !== lastSearchError) {
+    lastSearchError = newError;
+    notify?.error(newError, 0, { label: '重试', onClick: () => handleSearch() });
+  }
+});
 
 // 加载搜索历史
+// 暴露搜索输入框供快捷键使用
+defineExpose({ searchInput });
+
 async function loadSearchHistory() {
   try {
     // 检查是否在 Tauri 环境中

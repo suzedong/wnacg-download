@@ -150,6 +150,11 @@
       <button class="btn-primary" @click="handleRetry">🔄 重试</button>
     </div>
 
+    <!-- 对比加载中 -->
+    <div v-if="isComparing && aiLog.length === 0 && !aiStreamingContent && !compareResult">
+      <Skeleton height="120px" />
+    </div>
+
     <div v-if="compareResult" class="results-section">
       <div class="stats-cards">
         <div class="stat-card">
@@ -333,20 +338,37 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, inject } from 'vue';
+import { ref, computed, onMounted, onUnmounted, inject, watch } from 'vue';
 import { useCompare } from '../composables/useCompare';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
 import { CompareResult, MatchDetail, DownloadTask, CompareHistoryEntry } from '../types/index';
 import { readDir, readTextFile, remove } from '@tauri-apps/plugin-fs';
 import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
+import Skeleton from '../components/Skeleton.vue';
 
 const { isComparing, aiLog, aiStreamingContent, result, error, compare, cleanup } =
   useCompare();
 const { addToQueue } = useDownloadQueue();
 
 // 全局通知
-const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
+const notify = inject<{ success: (msg: string) => void; error: (msg: string, duration?: number, action?: { label: string; onClick: () => void }) => void; info: (msg: string) => void }>('notify');
+
+// 对比失败时弹出 Toast 通知（带重试按钮）
+let lastCompareError = '';
+watch(error, (newError) => {
+  if (newError && newError !== lastCompareError) {
+    lastCompareError = newError;
+    notify?.error(newError, 0, { label: '重试', onClick: () => handleCompare() });
+  }
+});
+
+// 对比完成时弹出 Toast 通知
+watch(() => result.value as CompareResult | null, (newResult) => {
+  if (newResult) {
+    notify?.info(`对比完成：需下载 ${newResult.to_download} 部，已拥有 ${newResult.already_have} 部`);
+  }
+});
 
 const searchFile = ref('');
 const localPath = ref('');

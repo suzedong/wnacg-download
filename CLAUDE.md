@@ -82,8 +82,7 @@ cargo build --release    # 发布构建
 
 - [search_with_playwright.js](scripts/search_with_playwright.js) — 搜索漫画，打开真实浏览器访问 wnacg.com 搜索结果页，提取漫画列表
 - [get_download_info.js](scripts/get_download_info.js) — 获取下载页信息，打开下载页提取 file_key、file_name 和 server2_url
-- [get_download_link.js](scripts/get_download_link.js) — 调用 Worker API 获取临时下载链接（已删除）
-- [download_via_playwright.js](scripts/download_via_playwright.js) — 单浏览器一步完成：获取链接 + 浏览器内下载下载（绕过 Cloudflare TLS 指纹）
+- [download_via_playwright.js](scripts/download_via_playwright.js) — 单浏览器一步完成：获取链接 + 浏览器内下载（绕过 Cloudflare TLS 指纹）
 
 ### 搜索流程（Playwright，非 Rust HTTP）
 

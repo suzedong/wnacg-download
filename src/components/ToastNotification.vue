@@ -9,6 +9,13 @@
       >
         <span class="toast-icon">{{ typeIcon(toast.type) }}</span>
         <span class="toast-message">{{ toast.message }}</span>
+        <button
+          v-if="toast.action"
+          class="toast-action"
+          @click="toast.action.onClick"
+        >
+          {{ toast.action.label }}
+        </button>
         <button class="toast-close" @click="remove(toast.id)">×</button>
       </div>
     </TransitionGroup>
@@ -64,6 +71,23 @@ function typeIcon(type: string): string {
 .toast-message {
   flex: 1;
   line-height: 1.4;
+}
+
+.toast-action {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+  opacity: 0.8;
+}
+
+.toast-action:hover {
+  opacity: 1;
 }
 
 .toast-close {

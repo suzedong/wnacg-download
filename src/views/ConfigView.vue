@@ -143,7 +143,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 const { config, loadConfig, saveConfig, resetConfig } = useConfig();
 
 // 全局通知
-const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
+const notify = inject<{ success: (msg: string) => void; error: (msg: string, duration?: number, action?: { label: string; onClick: () => void }) => void; info: (msg: string) => void }>('notify');
 
 onMounted(async () => {
   await loadConfig();
@@ -169,6 +169,27 @@ async function selectFolder() {
 
 async function handleSave() {
   if (config.value) {
+    // 验证存储路径
+    if (!config.value.storage_path || config.value.storage_path.trim() === '') {
+      notify?.error('存储路径不能为空，请选择或输入一个有效的文件夹路径', 0);
+      return;
+    }
+
+    // 验证代理格式
+    if (config.value.proxy_enabled && config.value.proxy) {
+      const proxyPattern = /^(http|https|socks5):\/\//;
+      if (!proxyPattern.test(config.value.proxy)) {
+        notify?.error('代理地址格式不正确，请以 http://、https:// 或 socks5:// 开头', 0);
+        return;
+      }
+    }
+
+    // 验证 AI API 地址
+    if (config.value.ai_api_url && !config.value.ai_api_url.startsWith('http')) {
+      notify?.error('AI API 地址必须以 http:// 或 https:// 开头', 0);
+      return;
+    }
+
     await saveConfig(config.value);
     notify?.success('配置已保存');
   }

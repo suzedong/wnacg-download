@@ -148,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, inject } from 'vue';
+import { ref, computed, onMounted, inject, watch } from 'vue';
 import { useDownload } from '../composables/useDownload';
 import { useConfig } from '../composables/useConfig';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
@@ -172,9 +172,29 @@ const { config, loadConfig } = useConfig();
 const { downloadQueue, removeFromQueue, clearQueue } = useDownloadQueue();
 
 // 全局通知
-const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
+const notify = inject<{ success: (msg: string) => void; error: (msg: string, duration?: number, action?: { label: string; onClick: () => void }) => void; info: (msg: string) => void }>('notify');
+
+// 下载失败时弹出 Toast 通知（带重试按钮）
+let lastErrorMessage = '';
+watch(error, (newError) => {
+  if (newError && newError !== lastErrorMessage) {
+    lastErrorMessage = newError;
+    notify?.error(newError, 0, { label: '重试', onClick: () => startDownload() });
+  }
+});
 
 const downloadResult = computed(() => result.value as DownloadResult | null);
+
+// 下载完成时弹出 Toast 通知
+watch(downloadResult, (newResult) => {
+  if (newResult) {
+    if (newResult.failed > 0) {
+      notify?.error(`下载完成：成功 ${newResult.success} 部，失败 ${newResult.failed} 部`);
+    } else {
+      notify?.success(`下载完成：成功 ${newResult.success} 部漫画`);
+    }
+  }
+});
 
 // 记录下载时使用的存储路径
 const lastSavePath = ref<string>('');

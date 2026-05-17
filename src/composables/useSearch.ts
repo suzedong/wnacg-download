@@ -17,9 +17,11 @@ export function useSearch() {
     error.value = '';
     progress.value = 0;
 
+    let unlisten: (() => void) | null = null;
+
     try {
       // 监听搜索进度
-      const unlisten = await listen('search_progress', (event: any) => {
+      unlisten = await listen('search_progress', (event: any) => {
         const { current, total: totalPages } = event.payload;
         progress.value = current;
         total.value = totalPages;
@@ -42,6 +44,9 @@ export function useSearch() {
       console.error('搜索失败：', e);
     } finally {
       isSearching.value = false;
+      if (unlisten) {
+        unlisten();
+      }
     }
   }
 
