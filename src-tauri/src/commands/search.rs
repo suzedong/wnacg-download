@@ -65,7 +65,7 @@ pub async fn search_comics(
     let _ = app.emit("search_progress", serde_json::json!({
         "current": 1,
         "total": total_pages,
-        "found": all_comics.len()
+        "found_count": all_comics.len()
     }));
 
     // 计算实际爬取页数
@@ -98,7 +98,7 @@ pub async fn search_comics(
                 let _ = app_clone.emit("search_progress", serde_json::json!({
                     "current": count + 1, // +1 因为第一页已经爬取
                     "total": max_pages,
-                    "found": 0
+                    "found_count": 0
                 }));
                 result
             });

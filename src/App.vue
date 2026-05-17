@@ -9,22 +9,32 @@
         <ConfigView v-else-if="currentView === 'config'" />
       </main>
     </div>
+    <ToastNotification />
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, provide } from 'vue';
 import Sidebar from './components/Sidebar.vue';
 import SearchView from './views/SearchView.vue';
 import CompareView from './views/CompareView.vue';
 import DownloadView from './views/DownloadView.vue';
 import ConfigView from './views/ConfigView.vue';
+import ToastNotification from './components/ToastNotification.vue';
+import { useToast } from './composables/useToast';
 
 const currentView = ref('search');
+const { success, error, info } = useToast();
 
 function handleViewChange(viewId) {
   currentView.value = viewId;
 }
+
+// 提供给子组件切换页面的能力
+provide('switchView', handleViewChange);
+
+// 提供全局通知方法
+provide('notify', { success, error, info });
 </script>
 
 <style>

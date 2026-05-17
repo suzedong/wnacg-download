@@ -94,7 +94,7 @@ fn main() {
             commands::config::save_config,
             commands::config::reset_config,
             commands::config::open_folder,
-            commands::config::open_folder,
+            commands::config::get_default_save_path,
             // 搜索命令（Phase 2 实现）
             commands::search::search_comics,
             // 对比命令（Phase 3 实现）
@@ -104,6 +104,10 @@ fn main() {
             commands::compare::get_download_info,
             // 下载命令（Phase 3 实现）
             commands::download::start_download,
+            commands::download::pause_download,
+            commands::download::resume_download,
+            commands::download::cancel_task,
+            commands::download::get_download_status,
             // 窗口控制
             window_minimize,
             window_maximize,

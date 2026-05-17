@@ -1,6 +1,10 @@
 // 下载器模块
+mod session;
+
+pub use session::*;
+
 use crate::error::AppError;
-use crate::events::{self, DownloadCompleteEvent, DownloadProgressEvent};
+use crate::events::{self, DownloadProgressEvent};
 use crate::notification;
 use crate::types::download::{DownloadResult, DownloadTask, FailedComic};
 use futures_util::StreamExt;
@@ -26,9 +30,12 @@ pub struct DownloaderConfig {
     pub proxy_enabled: bool,
     /// 默认存储路径
     pub storage_path: String,
+    /// 下载源优先策略：server2 | worker_api | auto
+    pub download_source_preference: String,
 }
 
 /// 下载器
+#[derive(Clone)]
 pub struct Downloader {
     client: Client,
     config: DownloaderConfig,
@@ -39,7 +46,7 @@ impl Downloader {
     pub fn new(config: DownloaderConfig) -> Result<Self, AppError> {
         let mut client_builder = Client::builder()
             .timeout(Duration::from_secs(300))
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
         // 配置代理
         if config.proxy_enabled && config.proxy.is_some() {
@@ -69,19 +76,20 @@ impl Downloader {
         let semaphore = Arc::new(tokio::sync::Semaphore::new(self.config.concurrent as usize));
 
         let mut handles = vec![];
+        let downloader = Arc::new(self.clone());
 
         for (_index, task) in tasks.into_iter().enumerate() {
-            let client = self.client.clone();
-            let config = self.config.clone();
             let app = app.clone();
             let success = success.clone();
             let failed = failed.clone();
             let success_list = success_list.clone();
+            let dl = downloader.clone();
             let permit = semaphore.clone().acquire_owned().await.unwrap();
+            let task_clone = task.clone();
 
             let handle = tokio::spawn(async move {
                 let _permit = permit;
-                let result = Self::download_single(&client, &config, &app, task.clone()).await;
+                let result = dl.download_single(&app, task_clone).await;
 
                 match result {
                     Ok(_) => {
@@ -119,9 +127,11 @@ impl Downloader {
         // 发送下载完成事件
         events::emit_download_complete(
             app,
-            DownloadCompleteEvent {
+            events::DownloadCompleteEvent {
                 success: result.success,
                 failed: result.failed,
+                success_list: result.success_list.clone(),
+                failed_list: result.failed_list.clone(),
             },
         );
 
@@ -136,41 +146,84 @@ impl Downloader {
         Ok(result)
     }
 
-    /// 下载单个漫画
-    async fn download_single(
-        client: &Client,
-        config: &DownloaderConfig,
+    /// 下载单个漫画（公开，供会话模块调用）
+    pub async fn download_single(
+        &self,
         app: &tauri::AppHandle,
         task: DownloadTask,
     ) -> Result<(), AppError> {
         println!("⬇️ 开始下载：{}", task.title);
 
-        // 确定保存路径（空时使用默认路径）
-        let save_dir = if task.save_path.is_empty() {
-            Path::new(&config.storage_path)
+        // 确定保存路径：优先使用配置路径，任务路径为空时使用配置的
+        let save_dir = if self.config.storage_path.is_empty() {
+            if task.save_path.is_empty() {
+                Path::new("./downloads")
+            } else {
+                Path::new(&task.save_path)
+            }
         } else {
-            Path::new(&task.save_path)
+            Path::new(&self.config.storage_path)
         };
         if !save_dir.exists() {
             fs::create_dir_all(&save_dir)?;
         }
 
-        // 通过 Tauri 命令获取下载信息（Playwright 绕过 Cloudflare）
-        println!("📄 获取下载页信息：aid={}", task.aid);
-        let (file_key, file_name, server2_url) = Self::fetch_download_info(app, &task.aid).await?;
-        println!("📦 文件：{} ({})", file_name, file_key);
+        let file_path = save_dir.join(&format!("{}_temp", task.aid));
+        let mut retries = 0;
 
-        // 获取下载地址（双源：Server 1 → Server 2）
-        let download_link = Self::get_download_url(client, &file_key, &file_name, &server2_url).await?;
-        println!("🔗 下载地址：{}", download_link);
+        loop {
+            // 每次重试都重新获取下载信息（临时链接可能过期）
+            if retries > 0 {
+                println!("🔄 第 {} 次重试，重新获取下载链接...", retries);
+            }
+            println!("📄 获取下载页信息：aid={}", task.aid);
+            let (file_key, file_name, server2_url) = Self::fetch_download_info(app, &task.aid).await?;
+            println!("📦 文件：{} ({})", file_name, file_key);
 
-        // 下载文件
-        let file_path = save_dir.join(&file_name);
-        Self::download_file(client, config, app, &download_link, &file_path, &task.aid).await?;
-
-        println!("✅ {} 下载完成", task.title);
-
-        Ok(())
+            // 下载文件
+            match Self::download_file(
+                &self.client,
+                &self.config,
+                app,
+                &file_key,
+                &file_name,
+                &server2_url,
+                &file_path,
+                &task.aid,
+            ).await {
+                Ok(()) => {
+                    // 下载成功，重命名为最终文件名
+                    let final_path = save_dir.join(&file_name);
+                    if final_path.exists() {
+                        fs::remove_file(&final_path)?;
+                    }
+                    fs::rename(&file_path, &final_path)?;
+                    println!("✅ {} 下载完成", task.title);
+                    return Ok(());
+                }
+                Err(e) => {
+                    retries += 1;
+                    if retries >= self.config.retry_times {
+                        // 清理临时文件
+                        if file_path.exists() {
+                            let _ = fs::remove_file(&file_path);
+                        }
+                        return Err(AppError::DownloadError(format!(
+                            "下载失败：{}", e
+                        )));
+                    }
+                    // 重试前删除临时文件，避免 Range 续传与不同 URL 冲突
+                    if file_path.exists() {
+                        let _ = fs::remove_file(&file_path);
+                    }
+                    println!(
+                        "⚠️ 下载失败（第 {} 次），{} 秒后重试...",
+                        retries, self.config.retry_interval
+                    );
+                    tokio::time::sleep(Duration::from_secs(self.config.retry_interval)).await;
+                }
+            }
+        }
     }
 
     /// 通过 Playwright 脚本获取下载信息（绕过 Cloudflare）
@@ -263,46 +316,58 @@ impl Downloader {
             .replace("&#124;", "|")
     }
 
-    /// 获取下载地址（双源：Playwright Worker API → Server 2）
-    async fn get_download_url(
-        _client: &Client,
-        file_key: &str,
-        file_name: &str,
-        server2_url: &str,
-    ) -> Result<String, AppError> {
-        // 尝试 1：Playwright 调用 Worker API 获取临时链接（绕过 Cloudflare）
-        match Self::get_url_from_worker_playwright(file_key, file_name).await {
-            Ok(url) => {
-                println!("🔗 使用 Worker API 临时链接");
-                return Ok(url);
-            }
-            Err(e) => println!("⚠️ Worker API 获取失败：{}，尝试备用线路...", e),
-        }
-
-        // 尝试 2：优先使用 Playwright 提取的 Server 2 直接下载链接
+    /// 获取 Server 2 直链（server2 策略下使用）
+    async fn get_server2_url(server2_url: &str, file_key: &str) -> String {
         if !server2_url.is_empty() {
-            let url = if server2_url.starts_with("//") {
+            if server2_url.starts_with("//") {
                 format!("https:{}", server2_url)
             } else {
                 server2_url.to_string()
-            };
-            println!("🔗 使用 Server 2 直链（Playwright 提取）");
-            return Ok(url);
+            }
+        } else {
+            // 兜底：拼接直链
+            format!("https://dl1.wn01.download/{}", file_key)
         }
-
-        // 最后回退：拼接直链
-        let direct_url = format!("https://dl1.wn01.download/{}", file_key);
-        println!("🔗 使用拼接直链（备用）");
-        Ok(direct_url)
     }
 
-    /// 通过 Playwright 调用 Worker API 获取临时下载链接
-    async fn get_url_from_worker_playwright(
+    /// 下载单个文件（根据配置策略选择下载源）
+    async fn download_file(
+        client: &Client,
+        config: &DownloaderConfig,
+        app: &tauri::AppHandle,
         file_key: &str,
         file_name: &str,
-    ) -> Result<String, AppError> {
+        server2_url: &str,
+        file_path: &Path,
+        task_id: &str,
+    ) -> Result<(), AppError> {
+        let strategy = &config.download_source_preference;
+
+        match strategy.as_str() {
+            "worker_api" => {
+                // Worker API 策略：单浏览器一步完成（获取链接 + 下载）
+                Self::download_file_via_playwright(app, file_key, file_name, file_path, task_id).await
+            }
+            _ => {
+                // Server 2 策略（及默认/兜底）：reqwest 直连
+                let download_url = Self::get_server2_url(server2_url, file_key).await;
+                Self::download_file_inner(client, app, &download_url, file_path, task_id).await
+            }
+        }
+    }
+
+    /// 通过 Playwright 浏览器下载文件（绕过 Cloudflare TLS 指纹验证）
+    /// 单浏览器一步完成：获取链接 + 下载
+    async fn download_file_via_playwright(
+        _app: &tauri::AppHandle,
+        file_key: &str,
+        file_name: &str,
+        file_path: &Path,
+        task_id: &str,
+    ) -> Result<(), AppError> {
         use tokio::process::Command as TokioCommand;
 
+        // 查找项目根目录
         let current = std::env::current_dir()
             .map_err(|e| AppError::DownloadError(format!("获取当前目录失败：{}", e)))?;
         let mut project_root = current.clone();
@@ -317,76 +382,49 @@ impl Downloader {
             }
         }
 
-        let script_path = project_root.join("scripts").join("get_download_link.js");
+        let script_path = project_root.join("scripts").join("download_via_playwright.js");
         if !script_path.exists() {
             return Err(AppError::DownloadError(format!("脚本不存在：{}", script_path.display())));
         }
 
+        let output_path = file_path
+            .to_str()
+            .ok_or_else(|| AppError::DownloadError("文件路径包含非 Unicode 字符".to_string()))?;
+
+        println!("🌐 使用 Playwright 浏览器下载（绕过 Cloudflare）...");
         let output = TokioCommand::new("node")
             .arg(&script_path)
             .arg(file_key)
             .arg(file_name)
+            .arg(output_path)
             .output()
             .await
-            .map_err(|e| AppError::DownloadError(format!("执行脚本失败：{}", e)))?;
+            .map_err(|e| AppError::DownloadError(format!("执行下载脚本失败：{}", e)))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let stderr = String::from_utf8_lossy(&output.stderr);
-
         if !stderr.is_empty() {
-            eprintln!("🔗 Worker 脚本输出：{}", stderr);
+            eprintln!("🌐 脚本输出：{}", stderr);
         }
 
-        let info: serde_json::Value = serde_json::from_str(&stdout)
-            .map_err(|e| AppError::DownloadError(format!("解析 Worker 结果失败：{}\n输出：{}", e, stdout)))?;
+        let result: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| AppError::DownloadError(format!("解析结果失败：{}\n输出：{}", e, stdout)))?;
 
-        if info.get("success").and_then(|v| v.as_bool()) != Some(true) {
-            let err = info.get("error")
+        if result.get("success").and_then(|v| v.as_bool()) != Some(true) {
+            let err = result.get("error")
                 .and_then(|v| v.as_str())
-                .unwrap_or("Worker API 未返回有效链接");
+                .unwrap_or("Playwright 下载失败");
             return Err(AppError::DownloadError(err.to_string()));
         }
 
-        let url = info.get("url")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::DownloadError("Worker API 未返回 url 字段".to_string()))?;
+        let size = result.get("size").and_then(|v| v.as_u64()).unwrap_or(0);
+        println!("✅ Playwright 下载完成：{} 字节（{:.2} MB）", size, size as f64 / (1024.0 * 1024.0));
 
-        Ok(url.to_string())
+        let _ = task_id;
+        Ok(())
     }
 
-    /// 下载单个文件（支持断点续传）
-    async fn download_file(
-        client: &Client,
-        config: &DownloaderConfig,
-        app: &tauri::AppHandle,
-        url: &str,
-        file_path: &Path,
-        task_id: &str,
-    ) -> Result<(), AppError> {
-        let mut retries = 0;
-        loop {
-            match Self::download_file_inner(client, app, url, file_path, task_id).await {
-                Ok(_) => return Ok(()),
-                Err(e) => {
-                    retries += 1;
-                    if retries >= config.retry_times {
-                        return Err(AppError::DownloadError(format!(
-                            "下载失败 {}，原因：{}",
-                            file_path.display(),
-                            e
-                        )));
-                    }
-                    println!(
-                        "⚠️ 下载失败（第 {} 次），{} 秒后重试...",
-                        retries, config.retry_interval
-                    );
-                    tokio::time::sleep(Duration::from_secs(config.retry_interval)).await;
-                }
-            }
-        }
-    }
-
-    /// 下载文件内部实现（带断点续传）
+    /// 下载文件内部实现（带断点续传 + Cookie 支持）
     async fn download_file_inner(
         client: &Client,
         app: &tauri::AppHandle,
@@ -404,19 +442,68 @@ impl Downloader {
             }
         }
 
-        // 构建请求，支持 Range 头
+        // 构建请求，支持 Range 头和 Referer
         let mut request = client.get(url);
         if existing_size > 0 {
             request = request.header("Range", format!("bytes={}-", existing_size));
         }
+        // 设置 Referer，模拟从 wnacg.com 下载
+        request = request.header("Referer", "https://www.wnacg.com/");
+
+        println!("📤 发送 GET 请求：{}", url.chars().take(80).collect::<String>());
 
         let response = request
             .send()
             .await
             .map_err(|e| AppError::DownloadError(format!("请求失败：{}", e)))?;
 
-        // 获取总大小
+        // 记录最终 URL（可能有重定向）
+        let final_url = response.url().to_string();
+        if final_url != url {
+            println!("🔄 URL 重定向：{} → {}", url, final_url);
+        }
+
+        // 记录协议版本
+        let version = response.version();
+        println!("📥 响应：HTTP/{:?}, 状态码: {}", version, response.status());
+
+        // 记录响应状态
+        let status = response.status();
         let content_length = response.content_length().unwrap_or(0);
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .map(|v| v.to_str().unwrap_or("unknown"))
+            .unwrap_or("unknown");
+        let connection_header = response
+            .headers()
+            .get(reqwest::header::CONNECTION)
+            .map(|v| v.to_str().unwrap_or(""))
+            .unwrap_or("");
+
+        if !status.is_success() {
+            // 提取 server 头（转换为 owned String，避免 text() 移动时借用冲突）
+            let server_hdr: String = response
+                .headers()
+                .get("server")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("unknown")
+                .to_string();
+            // 读取错误响应体
+            let error_body = response.text().await.unwrap_or_default();
+            return Err(AppError::DownloadError(format!(
+                "服务器返回错误：{} (server: {}, body: {})", status, server_hdr, &error_body[..error_body.len().min(200)]
+            )));
+        }
+
+        // 判断是否为真正的文件内容
+        if !content_type.starts_with("application/") && !content_type.starts_with("video/") && !content_type.starts_with("application/octet-stream") {
+            println!("⚠️ 响应类型：{}，可能不是文件流", content_type);
+        }
+
+        let expected_mb = content_length as f64 / (1024.0 * 1024.0);
+        println!("📦 文件大小：{:.2} MB，类型：{}，连接：{}", expected_mb, content_type, connection_header);
+
         let total_size = if existing_size > 0 && content_length > 0 {
             existing_size + content_length
         } else {
@@ -454,6 +541,30 @@ impl Downloader {
                     },
                 );
             }
+        }
+
+        // 确保写入磁盘
+        file.flush()?;
+
+        // 校验下载是否完整
+        if content_length > 0 {
+            let expected_downloaded = total_size - existing_size;
+            let actual_downloaded = downloaded - existing_size;
+            if actual_downloaded != expected_downloaded {
+                let expected_mb = expected_downloaded as f64 / (1024.0 * 1024.0);
+                let actual_mb = actual_downloaded as f64 / (1024.0 * 1024.0);
+                return Err(AppError::DownloadError(format!(
+                    "下载不完整：期望 {:.1} MB，实际 {:.1} MB",
+                    expected_mb, actual_mb
+                )));
+            }
+            println!("✅ 文件大小校验通过：{} 字节", actual_downloaded);
+        } else {
+            // 没有 Content-Length 时，至少检查是否下载到了数据
+            if downloaded == existing_size {
+                return Err(AppError::DownloadError("下载失败：未获取到任何数据".to_string()));
+            }
+            println!("✅ 下载完成：{} 字节（无 Content-Length，跳过大小校验）", downloaded - existing_size);
         }
 
         Ok(())

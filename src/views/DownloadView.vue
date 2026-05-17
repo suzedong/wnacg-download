@@ -24,13 +24,33 @@
             🗑 清空
           </button>
           <button
+            v-if="isDownloading"
+            class="btn-warning"
+            @click="isPaused ? resumeDownload() : pauseDownload()"
+          >
+            {{ isPaused ? '▶ 恢复' : '⏸ 暂停' }}
+          </button>
+          <button
             class="btn-primary"
             @click="startDownload"
             :disabled="isDownloading || downloadQueue.length === 0"
           >
-            {{ isDownloading ? '下载中...' : '▶ 开始下载' }}
+            {{ isDownloading ? (isPaused ? '已暂停' : '下载中...') : '▶ 开始下载' }}
           </button>
         </div>
+      </div>
+
+      <div class="save-path-bar">
+        <span class="path-label">📁 保存路径:</span>
+        <span class="path-value" :title="storagePath">{{ storagePath || '未配置' }}</span>
+        <span class="path-source">{{ storagePathSource }}</span>
+        <button
+          class="btn-link"
+          @click="goToConfig"
+          :disabled="isDownloading"
+        >
+          修改设置
+        </button>
       </div>
 
       <div class="task-list">
@@ -45,9 +65,9 @@
             <div class="task-details">
               <h4>{{ task.title }}</h4>
               <div v-if="taskProgress[task.aid]" class="task-progress-info">
-                <div class="progress-bar">
+                <div class="progress-bar-track">
                   <div
-                    class="progress-fill"
+                    class="progress-bar-fill"
                     :style="{ width: `${taskProgress[task.aid]}%` }"
                   ></div>
                 </div>
@@ -57,9 +77,8 @@
           </div>
           <button
             class="btn-icon"
-            @click="removeFromQueue(task.aid)"
-            :disabled="isDownloading"
-            title="移除"
+            @click="cancelTaskFromQueue(task.aid)"
+            title="取消下载"
           >
             ❌
           </button>
@@ -70,7 +89,7 @@
     <div v-if="isDownloading" class="download-status">
       <div class="status-item">
         <span class="label">总体进度:</span>
-        <span class="value">{{ progress }}%</span>
+        <span class="value">{{ progress.toFixed(1) }}%</span>
       </div>
       <div class="status-item">
         <span class="label">速度:</span>
@@ -129,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, inject } from 'vue';
 import { useDownload } from '../composables/useDownload';
 import { useConfig } from '../composables/useConfig';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
@@ -138,20 +157,67 @@ import { invoke } from '@tauri-apps/api/core';
 
 const {
   isDownloading,
+  isPaused,
   progress,
   speed,
   error,
   result,
+  taskProgress,
   startDownload: download,
+  pauseDownload,
+  resumeDownload,
+  cancelTask,
 } = useDownload();
 const { config, loadConfig } = useConfig();
 const { downloadQueue, removeFromQueue, clearQueue } = useDownloadQueue();
 
-const taskProgress = ref<Record<string, number>>({});
+// 全局通知
+const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
+
 const downloadResult = computed(() => result.value as DownloadResult | null);
 
 // 记录下载时使用的存储路径
 const lastSavePath = ref<string>('');
+
+// 系统默认保存路径（当前工作目录）
+const defaultSavePath = ref<string>('');
+
+// 实际保存路径：优先使用配置路径，其次任务的 save_path，最后系统默认
+const storagePath = computed(() => {
+  if (config.value?.storage_path) {
+    return config.value.storage_path;
+  }
+  const firstTask = downloadQueue.value[0];
+  if (firstTask?.save_path) {
+    return firstTask.save_path;
+  }
+  return defaultSavePath.value || '';
+});
+
+// 路径来源标注
+const storagePathSource = computed(() => {
+  if (config.value?.storage_path) return '（配置路径）';
+  const firstTask = downloadQueue.value[0];
+  if (firstTask?.save_path) return '（任务路径）';
+  if (defaultSavePath.value) return '（默认路径）';
+  return '';
+});
+
+const switchView = inject<(viewId: string) => void>('switchView');
+
+function goToConfig() {
+  switchView?.('config');
+}
+
+// 页面加载时读取配置和默认路径
+onMounted(async () => {
+  await loadConfig();
+  try {
+    defaultSavePath.value = await invoke('get_default_save_path');
+  } catch (e: any) {
+    console.error('获取默认路径失败：', e);
+  }
+});
 
 async function startDownload() {
   if (downloadQueue.value.length === 0) return;
@@ -172,6 +238,7 @@ async function startDownload() {
     proxy: config.value.proxy,
     proxy_enabled: config.value.proxy_enabled,
     storage_path: config.value.storage_path,
+    download_source_preference: config.value.download_source_preference || 'server2',
   });
 }
 
@@ -230,7 +297,7 @@ function retryFailed() {
         title: failed.title,
         url: '', // 这里需要从原始任务中获取，暂时留空
         cover_url: '',
-        save_path: config.value?.default_save_path || './downloads',
+        save_path: config.value?.storage_path || './downloads',
         pages: 0,
       }) as DownloadTask
   );
@@ -238,13 +305,17 @@ function retryFailed() {
   // 添加到队列
   const { addToQueue } = useDownloadQueue();
   const added = addToQueue(failedTasks);
-
-  alert(`已将 ${added} 个失败任务重新添加到下载队列`);
+  notify?.success(`已将 ${added} 个失败任务重新添加到下载队列`);
 }
 
 function resetDownload() {
   result.value = null;
   error.value = '';
+}
+
+function cancelTaskFromQueue(aid: string) {
+  cancelTask(aid);
+  removeFromQueue(aid);
 }
 </script>
 
@@ -309,6 +380,60 @@ h3 {
   gap: 8px;
 }
 
+.save-path-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.path-label {
+  color: var(--text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.path-value {
+  flex: 1;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: monospace;
+}
+
+.path-source {
+  color: var(--text-secondary);
+  opacity: 0.7;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  text-decoration: underline;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+.btn-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-link:hover:not(:disabled) {
+  opacity: 0.8;
+}
+
 .btn-primary {
   padding: 10px 20px;
   background: var(--primary-gradient);
@@ -349,6 +474,22 @@ h3 {
 
 .btn-secondary:hover:not(:disabled) {
   background: var(--border-color);
+}
+
+.btn-warning {
+  padding: 10px 16px;
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: opacity 0.2s;
+}
+
+.btn-warning:hover {
+  opacity: 0.9;
 }
 
 .btn-icon {
@@ -419,14 +560,15 @@ h3 {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-right: 8px;
 }
 
 .progress-bar {
-  flex: 1;
   height: 6px;
   background: var(--border-color);
   border-radius: 3px;
   overflow: hidden;
+  max-width: 500px;
 }
 
 .progress-fill {

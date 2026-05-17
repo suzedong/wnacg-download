@@ -82,7 +82,8 @@ cargo build --release    # 发布构建
 
 - [search_with_playwright.js](scripts/search_with_playwright.js) — 搜索漫画，打开真实浏览器访问 wnacg.com 搜索结果页，提取漫画列表
 - [get_download_info.js](scripts/get_download_info.js) — 获取下载页信息，打开下载页提取 file_key、file_name 和 server2_url
-- [get_download_link.js](scripts/get_download_link.js) — 调用 Worker API 获取临时下载链接，在浏览器上下文中绕过 Cloudflare
+- [get_download_link.js](scripts/get_download_link.js) — 调用 Worker API 获取临时下载链接（已删除）
+- [download_via_playwright.js](scripts/download_via_playwright.js) — 单浏览器一步完成：获取链接 + 浏览器内下载下载（绕过 Cloudflare TLS 指纹）
 
 ### 搜索流程（Playwright，非 Rust HTTP）
 
@@ -90,7 +91,7 @@ cargo build --release    # 发布构建
 
 ### 配置
 
-存储路径：`{exe_dir}/config/config.json`。主要字段：`storage_path`（存储路径）、`proxy`/`proxy_enabled`（代理）、`max_pages`（最大页数）、`request_interval`（请求间隔）、`search_chinese_only`（仅中文搜索）、`concurrent_downloads`（并发下载数，默认 3）、`retry_times`（重试次数，默认 3）、`retry_interval`（重试间隔，默认 30 秒）、`ai_api_url`、`ai_api_key`、`ai_model`（AI 模型名称）、`ai_prompt`（AI Prompt 模板）、`ai_temperature`（AI 温度，默认 0.0）、`match_threshold`（匹配阈值，默认 0.8）、`theme`（主题：light/dark）。
+存储路径：`{exe_dir}/config/config.json`。主要字段：`storage_path`（存储路径）、`proxy`/`proxy_enabled`（代理）、`max_pages`（最大页数）、`request_interval`（请求间隔）、`search_chinese_only`（仅中文搜索）、`concurrent_downloads`（并发下载数，默认 3）、`retry_times`（重试次数，默认 3）、`retry_interval`（重试间隔，默认 30 秒）、`download_source_preference`（下载源策略，默认 server2）、`ai_api_url`、`ai_api_key`、`ai_model`（AI 模型名称）、`ai_prompt`（AI Prompt 模板）、`ai_temperature`（AI 温度，默认 0.0）、`match_threshold`（匹配阈值，默认 0.8）、`theme`（主题：light/dark）。
 
 ### 缓存
 
@@ -156,10 +157,10 @@ cargo build --release    # 发布构建
 - 下载失败时会尝试重试
 - 支持断点续传
 - 下载完成后校验文件完整性
-- **获取下载地址的三级回退策略**：
-  1. **Worker API**（Playwright 调用）：`scripts/get_download_link.js` 在浏览器中调用 `d1.wcdn.date/api/generate-link` 获取临时链接
-  2. **Server 2 直链**（Playwright 提取）：从下载页提取的 `server2_url`
-  3. **拼接直链**（兜底）：`https://dl1.wn01.download/{file_key}`
+- **获取下载地址的策略**（通过 `download_source_preference` 配置）：
+  - **server2**（默认推荐）：从下载页提取的 `server2_url`（`dl1.wn01.download`），reqwest 直连下载，最快
+  - **worker_api**：`download_via_playwright.js` 单浏览器一步完成（获取链接 + 下载），绕过 Cloudflare TLS 指纹
+- Worker API 链接（`d1.wcdn.date`）必须通过 Playwright 浏览器下载，reqwest/curl 被 Cloudflare TLS 指纹拦截
 
 ### AI 匹配规则
 - **两阶段匹配流程**：
@@ -430,5 +431,5 @@ alert('Download complete!');
 
 ---
 
-**最后更新**: 2026-05-14  
+**最后更新**: 2026-05-17  
 **版本**: v4.0（纯桌面端重构版）

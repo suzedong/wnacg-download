@@ -84,6 +84,8 @@
       {{ error }}
     </div>
 
+    <!-- 全局错误提示已迁移到 Toast，保留此块仅用于搜索中的内联错误 -->
+
     <!-- 当前搜索信息 -->
     <div v-if="currentSearch" class="current-search">
       <div class="search-info">
@@ -146,7 +148,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, inject } from 'vue';
 import { useSearch } from '../composables/useSearch';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
 import { Comic } from '../types/index';
@@ -164,8 +166,10 @@ const showDeleteConfirmModal = ref(false);
 const deleteTargetPath = ref('');
 
 const { results, isSearching, progress, total, error, search } = useSearch();
-
 const { addToQueue } = useDownloadQueue();
+
+// 全局通知
+const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
 
 // 加载搜索历史
 async function loadSearchHistory() {
@@ -251,7 +255,7 @@ async function loadSearchHistory() {
       console.log('非 Tauri 环境，跳过搜索历史加载');
     }
   } catch (e) {
-    console.error('加载搜索历史失败：', e);
+    notify?.error(`加载搜索历史失败：${e}`);
   }
 }
 
@@ -278,8 +282,8 @@ async function loadSearchHistoryItem(filePath: string) {
     } else {
       console.log('非 Tauri 环境，跳过加载历史搜索结果');
     }
-  } catch (e) {
-    error.value = `加载搜索历史失败：${e}`;
+  } catch (e: any) {
+    notify?.error(`加载搜索历史失败：${e.message || e}`);
   }
 }
 
@@ -314,8 +318,8 @@ async function deleteSearchHistory(filePath: string) {
     } else {
       console.log('非 Tauri 环境，跳过删除搜索历史');
     }
-  } catch (e) {
-    error.value = `删除搜索历史失败：${e}`;
+  } catch (e: any) {
+    notify?.error(`删除搜索历史失败：${e.message || e}`);
   }
 }
 
@@ -329,8 +333,8 @@ async function previewComic(url: string) {
       // 在浏览器环境中直接打开
       window.open(url, '_blank');
     }
-  } catch (e) {
-    error.value = `打开预览失败：${e}`;
+  } catch (e: any) {
+    notify?.error(`打开预览失败：${e.message || e}`);
   }
 }
 
@@ -410,7 +414,7 @@ function addToDownloadQueue() {
   }));
 
   const added = addToQueue(tasks);
-  alert(`已添加 ${added} 部漫画到下载队列`);
+  notify?.success(`已添加 ${added} 部漫画到下载队列`);
 }
 
 // 组件挂载时加载搜索历史

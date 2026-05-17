@@ -1,7 +1,7 @@
 // 事件定义模块
 
 use serde::Serialize;
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 
 /// 搜索进度事件
 #[derive(Clone, Serialize)]
@@ -49,13 +49,17 @@ pub struct AiProgressEvent {
     pub streaming_content: Option<String>,
 }
 
-/// 下载完成事件
+/// 下载完成事件（包含完整结果信息）
 #[derive(Clone, Serialize)]
 pub struct DownloadCompleteEvent {
     /// 成功数量
     pub success: u32,
     /// 失败数量
     pub failed: u32,
+    /// 成功标题列表
+    pub success_list: Vec<String>,
+    /// 失败详情列表
+    pub failed_list: Vec<crate::types::download::FailedComic>,
 }
 
 /// 错误事件
@@ -74,7 +78,11 @@ pub fn emit_search_progress(app: &tauri::AppHandle, event: SearchProgressEvent) 
 
 /// 发送下载进度事件
 pub fn emit_download_progress(app: &tauri::AppHandle, event: DownloadProgressEvent) {
-    let _ = app.emit("download_progress", event);
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.emit("download_progress", event);
+    } else {
+        let _ = app.emit("download_progress", event);
+    }
 }
 
 /// 发送对比进度事件
@@ -89,7 +97,19 @@ pub fn emit_ai_progress(app: &tauri::AppHandle, event: AiProgressEvent) {
 
 /// 发送下载完成事件
 pub fn emit_download_complete(app: &tauri::AppHandle, event: DownloadCompleteEvent) {
-    let _ = app.emit("download_complete", event);
+    // 通过主窗口明确发射事件，确保前端能收到
+    if let Some(window) = app.get_webview_window("main") {
+        if let Err(e) = window.emit("download_complete", event) {
+            eprintln!("⚠️ 通过窗口发射 download_complete 失败：{}", e);
+        }
+        println!("✅ 已通过主窗口发射 download_complete 事件");
+    } else {
+        // 回退：通过 AppHandle 广播
+        if let Err(e) = app.emit("download_complete", event) {
+            eprintln!("⚠️ 通过 AppHandle 发射 download_complete 失败：{}", e);
+        }
+        println!("✅ 已通过 AppHandle 广播 download_complete 事件");
+    }
 }
 
 /// 发送错误事件

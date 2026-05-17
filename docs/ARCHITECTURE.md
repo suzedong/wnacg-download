@@ -57,7 +57,7 @@
 ├── scripts/                      # 脚本目录
 │   ├── search_with_playwright.js # Playwright 搜索脚本
 │   ├── get_download_info.js      # Playwright 获取下载页信息
-│   └── get_download_link.js      # Playwright 调用 Worker API
+│   └── download_via_playwright.js # Playwright 浏览器直接下载（绕过 Cloudflare）
 │
 ├── src-tauri/                    # Tauri 应用（主目录）
 │   ├── src/
@@ -224,20 +224,19 @@ impl Downloader {
 
     async fn download_single(&self, task: &DownloadTask) -> Result<()> {
         // 1. Playwright 提取下载信息
-        // 2. 三级回退获取下载链接
+        // 2. 双策略获取下载链接
         // 3. 断点续传下载
     }
 }
 ```
 
-**获取下载地址的三级回退策略**：
-1. **Worker API**（Playwright 调用）：`scripts/get_download_link.js` 在浏览器中调用 `d1.wcdn.date/api/generate-link` 获取临时链接
-2. **Server 2 直链**（Playwright 提取）：从下载页提取的 `server2_url`
-3. **拼接直链**（兜底）：`https://dl1.wn01.download/{file_key}`
+**获取下载地址的策略选择**（通过配置 `download_source_preference` 控制）：
+1. **Server 2 直链**（推荐默认）：从下载页提取的 `server2_url`，服务器为 `dl1.wn01.download`，reqwest 直连即可
+2. **Worker API**（绕过 Cloudflare）：`scripts/download_via_playwright.js` 在浏览器中调用 `d1.wcdn.date/api/generate-link` 并直接下载，绕过 TLS 指纹验证
 
 **关键特性**：
 - 并发下载（可配置数量）
-- 断点续传
+- 断点续传（Server 2 支持）
 - 重试机制
 - 进度追踪
 - 文件完整性校验
@@ -266,23 +265,32 @@ impl Comparer {
 ```rust
 // core/ai/mod.rs
 pub struct AiMatcher {
-    config: AiConfig,
     client: reqwest::Client,
+    api_url: String,
+    api_key: Option<String>,
+    model: String,
+    prompt_template: String,
+    temperature: f64,
+    match_threshold: f64,
 }
 
 impl AiMatcher {
-    // Phase 1: 本地精确/模糊匹配（同步，无网络）
-    fn local_match(&self, website_comics: &[Comic], local_comics: &[LocalComic]) -> Result<AiMatchResult> {
-        // 1. 标题前缀清洗
-        // 2. 精确匹配 → 包含关系 → Levenshtein 距离
-        // 3. 置信度 >= threshold 标记为 already_have
+    // 两阶段匹配入口：本地优先 + AI 兜底
+    pub async fn match_comics(
+        &self, app: &AppHandle,
+        website_comics: &[Comic],
+        local_comics: &[LocalComic],
+    ) -> Result<AiMatchResult> {
+        // Phase 1: 本地精确/模糊匹配（同步）
+        // Phase 2: 仅对未匹配的漫画调用 AI（分批，每批 20 部）
     }
 
-    // Phase 2: AI 仅兜底未匹配的漫画
-    async fn match_comics_for_subset(&self, unmatched: &[Comic], local: &[LocalComic]) -> Result<AiMatchResult> {
-        // 1. 分批发送未匹配漫画（每批 20 部）
-        // 2. SSE 流式输出，前端实时显示
-        // 3. 解析 AI JSON 响应
+    fn local_match(...) -> Result<AiMatchResult> {
+        // Levenshtein + 前缀清洗
+    }
+
+    async fn match_comics_for_subset(...) -> Result<AiMatchResult> {
+        // AI 分批匹配 + SSE 流式
     }
 }
 ```
@@ -333,6 +341,7 @@ pub struct AppConfig {
     pub ai_temperature: f64,
     pub match_threshold: f64,
     pub theme: String, // "light" 或 "dark"
+    pub download_source_preference: String, // "server2" | "worker_api"
 }
 
 impl Config {
@@ -369,6 +378,7 @@ pub struct AiProgressEvent {
 }
 pub struct DownloadCompleteEvent {
     success: u32, failed: u32,
+    success_list: Vec<String>, failed_list: Vec<FailedComic>,
 }
 pub struct ErrorEvent {
     message: String,
@@ -558,14 +568,9 @@ fn send_notification(app: &AppHandle, title: &str, body: &str) {
   ↓
 后端创建 Downloader
   ↓
-Playwright 提取下载信息（file_key、file_name、server2_url）
-  ↓
-三级回退获取下载地址：
-  1. Playwright 调用 Worker API 获取临时链接
-  2. Server 2 直链（Playwright 提取）
-  3. 拼接直链（兜底）
-  ↓
-并发下载（可配置数量）
+根据配置选择下载策略：
+  - Server 2：reqwest 直连下载（dl1.wn01.download）
+  - Worker API：单浏览器一步完成（获取链接 + 浏览器内下载，绕过 Cloudflare）
   ↓
 发送 download_progress Event
   ↓
@@ -691,5 +696,5 @@ try {
 
 **文档结束**
 
-**最后更新**: 2026-05-14  
-**版本**: v4.0（纯桌面端重构版）
+**最后更新**: 2026-05-17  
+**版本**: v4.1（下载源策略优化版）

@@ -117,4 +117,6 @@ export interface AppConfig {
   ai_temperature: number;
   match_threshold: number;
   theme: string;
+  /// 下载源优先策略：server2 | worker_api | auto
+  download_source_preference: string;
 }

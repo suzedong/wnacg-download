@@ -18,6 +18,14 @@ pub fn reset_config() -> Result<crate::types::config::AppConfig, String> {
     crate::config::reset_config().map_err(|e| e.to_string())
 }
 
+/// 获取默认保存路径（当前工作目录）
+#[command]
+pub fn get_default_save_path() -> Result<String, String> {
+    std::env::current_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| format!("获取默认路径失败：{}", e))
+}
+
 /// 打开本地文件夹（使用系统原生方式）
 #[command]
 pub fn open_folder(path: String) -> Result<(), String> {

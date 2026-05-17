@@ -2,13 +2,14 @@
   <div class="config-view">
     <h2>⚙️ 配置设置</h2>
 
-    <div v-if="error" class="error">{{ error }}</div>
-
     <div v-if="config" class="config-form">
       <h3>存储设置</h3>
       <div class="form-group">
         <label>默认存储路径：</label>
-        <input v-model="config.storage_path" type="text" />
+        <div class="path-input-row">
+          <input v-model="config.storage_path" type="text" placeholder="选择或输入保存路径" />
+          <button class="btn-browse" @click="selectFolder">📁 选择文件夹</button>
+        </div>
       </div>
 
       <h3>网络设置</h3>
@@ -42,8 +43,20 @@
         />
       </div>
       <div class="form-group">
+        <label>下载源优先策略：</label>
+        <select v-model="config.download_source_preference" class="source-select">
+          <option value="server2">Server 2 直链（dl1.wn01.download）</option>
+          <option value="worker_api">Worker API 临时链接（d1.wcdn.date）</option>
+        </select>
+        <span class="hint">推荐 Server 2，稳定且无需浏览器；Worker API 需非 headless 浏览器（短暂可见）</span>
+      </div>
+      <div class="form-group">
         <label>下载重试次数：</label>
         <input v-model.number="config.retry_times" type="number" />
+      </div>
+      <div class="form-group">
+        <label>重试间隔（秒）：</label>
+        <input v-model.number="config.retry_interval" type="number" />
       </div>
 
       <h3>AI 设置</h3>
@@ -112,24 +125,52 @@
   </div>
 </template>
 
-<script setup>
-import { onMounted } from 'vue';
+<script setup lang="ts">
+import { onMounted, inject } from 'vue';
 import { useConfig } from '../composables/useConfig';
+import { open } from '@tauri-apps/plugin-dialog';
 
-const { config, error, loadConfig, saveConfig, resetConfig } = useConfig();
+const { config, loadConfig, saveConfig, resetConfig } = useConfig();
+
+// 全局通知
+const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
 
 onMounted(async () => {
   await loadConfig();
 });
 
+async function selectFolder() {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: false,
+      title: '选择默认存储路径',
+    });
+    if (selected && typeof selected === 'string') {
+      config.value!.storage_path = selected;
+      // 自动保存
+      await saveConfig(config.value!);
+      notify?.success(`保存路径已更新：${selected}`);
+    }
+  } catch (e: any) {
+    notify?.error(`选择文件夹失败：${e.message || e}`);
+  }
+}
+
 async function handleSave() {
   if (config.value) {
     await saveConfig(config.value);
+    notify?.success('配置已保存');
   }
 }
 
 async function handleReset() {
-  await resetConfig();
+  try {
+    await resetConfig();
+    notify?.success('配置已重置为默认值');
+  } catch (e: any) {
+    notify?.error(`重置配置失败：${e.message || e}`);
+  }
 }
 </script>
 
@@ -169,6 +210,7 @@ h3 {
 
 .form-group input[type='text'],
 .form-group input[type='number'],
+.form-group select,
 .form-group textarea {
   width: 100%;
   padding: 10px 12px;
@@ -182,6 +224,36 @@ h3 {
 .form-group textarea {
   font-family: monospace;
   resize: vertical;
+}
+
+.source-select {
+  cursor: pointer;
+}
+
+.path-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.path-input-row input {
+  flex: 1;
+}
+
+.btn-browse {
+  padding: 10px 16px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.btn-browse:hover {
+  background: var(--border-color);
 }
 
 .form-actions {
@@ -210,12 +282,5 @@ h3 {
   color: var(--text-secondary);
   font-size: 14px;
 }
-
-.error {
-  padding: 12px;
-  background: #fee;
-  color: #f56c6c;
-  border-radius: 8px;
-  margin-bottom: 16px;
-}
 </style>
+

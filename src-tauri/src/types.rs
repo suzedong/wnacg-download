@@ -109,6 +109,8 @@ pub mod download {
         pub proxy_enabled: bool,
         /// 默认保存路径
         pub storage_path: String,
+        /// 下载源优先策略
+        pub download_source_preference: Option<String>,
     }
 
     /// 下载进度
@@ -252,6 +254,9 @@ pub mod config {
         pub match_threshold: f64,
         /// 主题（light/dark）
         pub theme: String,
+        /// 下载源优先策略：server2 | worker_api | auto
+        #[serde(default)]
+        pub download_source_preference: String,
     }
 
     impl Default for AppConfig {
@@ -273,6 +278,7 @@ pub mod config {
                 ai_temperature: 0.0,
                 match_threshold: 0.8,
                 theme: "light".to_string(),
+                download_source_preference: "server2".to_string(),
             }
         }
     }

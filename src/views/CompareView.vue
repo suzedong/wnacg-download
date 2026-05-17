@@ -333,7 +333,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, inject } from 'vue';
 import { useCompare } from '../composables/useCompare';
 import { useDownloadQueue } from '../composables/useDownloadQueue';
 import { CompareResult, MatchDetail, DownloadTask, CompareHistoryEntry } from '../types/index';
@@ -344,6 +344,9 @@ import { open } from '@tauri-apps/plugin-dialog';
 const { isComparing, aiLog, aiStreamingContent, result, error, compare, cleanup } =
   useCompare();
 const { addToQueue } = useDownloadQueue();
+
+// 全局通知
+const notify = inject<{ success: (msg: string) => void; error: (msg: string) => void; info: (msg: string) => void }>('notify');
 
 const searchFile = ref('');
 const localPath = ref('');
@@ -741,7 +744,7 @@ function addSelectedToDownload() {
   console.log(`添加了 ${addedCount} 个任务到下载队列`);
 
   if (addedCount > 0) {
-    alert(`已添加 ${addedCount} 个漫画到下载队列`);
+    notify?.success(`已添加 ${addedCount} 个漫画到下载队列`);
   }
 }
 
@@ -761,7 +764,7 @@ function addAllToDownload() {
   console.log(`添加了 ${addedCount} 个任务到下载队列`);
 
   if (addedCount > 0) {
-    alert(`已添加 ${addedCount} 个漫画到下载队列`);
+    notify?.success(`已添加 ${addedCount} 个漫画到下载队列`);
   }
 }
 
