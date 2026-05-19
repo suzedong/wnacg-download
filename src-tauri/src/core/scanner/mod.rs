@@ -208,3 +208,64 @@ impl Scanner {
         (total_size, image_count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- clean_title ---
+
+    #[test]
+    fn test_clean_title_no_entities() {
+        assert_eq!(Scanner::clean_title("火影忍者"), "火影忍者");
+    }
+
+    #[test]
+    fn test_clean_title_nbsp() {
+        assert_eq!(Scanner::clean_title("火影&nbsp;忍者"), "火影 忍者");
+    }
+
+    #[test]
+    fn test_clean_title_ampersand() {
+        assert_eq!(Scanner::clean_title("Naruto &amp; Boruto"), "Naruto & Boruto");
+    }
+
+    #[test]
+    fn test_clean_title_pipe() {
+        assert_eq!(Scanner::clean_title("火影&#124;忍者"), "火影|忍者");
+    }
+
+    #[test]
+    fn test_clean_title_mixed_entities() {
+        let input = "Naruto&nbsp;&amp;&nbsp;Boruto";
+        assert_eq!(Scanner::clean_title(input), "Naruto & Boruto");
+    }
+
+    #[test]
+    fn test_clean_title_apostrophe() {
+        assert_eq!(Scanner::clean_title("It&#39;s Naruto"), "It's Naruto");
+    }
+
+    #[test]
+    fn test_clean_title_hex_apostrophe() {
+        assert_eq!(Scanner::clean_title("It&#x27;s Naruto"), "It's Naruto");
+    }
+
+    #[test]
+    fn test_clean_title_lt_gt() {
+        assert_eq!(Scanner::clean_title("&lt;title&gt;"), "<title>");
+    }
+
+    #[test]
+    fn test_clean_title_extra_spaces() {
+        assert_eq!(Scanner::clean_title("  火影  忍者  "), "火影 忍者");
+    }
+
+    #[test]
+    fn test_clean_title_all_entities() {
+        let input = "&nbsp;&lt;em&gt;Naruto&nbsp;&amp;&nbsp;Boruto&#124;&#39;&#x27;&gt;";
+        let result = Scanner::clean_title(input);
+        assert!(result.contains("<em>"));
+        assert!(result.contains("Naruto & Boruto"));
+    }
+}

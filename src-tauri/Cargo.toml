@@ -1,9 +1,11 @@
 [package]
 name = "wnacg-downloader"
 version = "4.0.0"
-description = "WNACG 漫画下载器 - 纯桌面端"
-authors = ["WNACG Team"]
+description = "WNACG 漫画搜索、对比和下载工具"
+authors = ["WNACG Downloader Team"]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/wnacg-downloader"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
