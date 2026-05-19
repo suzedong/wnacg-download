@@ -570,3 +570,57 @@ impl Downloader {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- decode_html_entities ---
+
+    #[test]
+    fn test_decode_no_entities() {
+        assert_eq!(Downloader::decode_html_entities("火影忍者"), "火影忍者");
+    }
+
+    #[test]
+    fn test_decode_nbsp() {
+        assert_eq!(Downloader::decode_html_entities("火影&nbsp;忍者"), "火影 忍者");
+    }
+
+    #[test]
+    fn test_decode_ampersand() {
+        assert_eq!(Downloader::decode_html_entities("Naruto &amp; Boruto"), "Naruto & Boruto");
+    }
+
+    #[test]
+    fn test_decode_mixed() {
+        let input = "Naruto&nbsp;&amp;&nbsp;Boruto&#124;&#39;";
+        assert_eq!(Downloader::decode_html_entities(input), "Naruto & Boruto|'");
+    }
+
+    #[test]
+    fn test_decode_all_known() {
+        let input = "&nbsp;&amp;&lt;&gt;&quot;&#39;&#x27;&#124;";
+        assert_eq!(Downloader::decode_html_entities(input), " &<>\"''|");
+    }
+
+    // --- get_server2_url ---
+
+    #[tokio::test]
+    async fn test_server2_url_empty() {
+        let result = Downloader::get_server2_url("", "abc123").await;
+        assert_eq!(result, "https://dl1.wn01.download/abc123");
+    }
+
+    #[tokio::test]
+    async fn test_server2_url_double_slash() {
+        let result = Downloader::get_server2_url("//example.com/path", "key").await;
+        assert_eq!(result, "https://example.com/path");
+    }
+
+    #[tokio::test]
+    async fn test_server2_url_full() {
+        let result = Downloader::get_server2_url("https://dl1.wn01.download/file.zip", "key").await;
+        assert_eq!(result, "https://dl1.wn01.download/file.zip");
+    }
+}

@@ -824,3 +824,245 @@ impl AiMatcher {
         re.replace(title, "").trim().to_string()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- levenshtein_distance ---
+
+    #[test]
+    fn test_levenshtein_distance_same_string() {
+        assert_eq!(AiMatcher::levenshtein_distance("hello", "hello"), 0);
+    }
+
+    #[test]
+    fn test_levenshtein_distance_empty() {
+        assert_eq!(AiMatcher::levenshtein_distance("", "abc"), 3);
+        assert_eq!(AiMatcher::levenshtein_distance("abc", ""), 3);
+        assert_eq!(AiMatcher::levenshtein_distance("", ""), 0);
+    }
+
+    #[test]
+    fn test_levenshtein_distance_single_char_diff() {
+        assert_eq!(AiMatcher::levenshtein_distance("cat", "bat"), 1);
+    }
+
+    #[test]
+    fn test_levenshtein_distance_complete_replace() {
+        assert_eq!(AiMatcher::levenshtein_distance("abc", "xyz"), 3);
+    }
+
+    // --- calculate_similarity ---
+
+    #[test]
+    fn test_similarity_identical() {
+        assert!((AiMatcher::calculate_similarity("naruto", "naruto") - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_similarity_case_insensitive() {
+        assert!((AiMatcher::calculate_similarity("Naruto", "naruto") - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_similarity_contains() {
+        let score = AiMatcher::calculate_similarity("naruto", "naruto shippuden");
+        // 包含关系：min_len/max_len * 0.9 = 6/16 * 0.9 ≈ 0.34
+        assert!(score > 0.3);
+    }
+
+    #[test]
+    fn test_similarity_unrelated() {
+        let score = AiMatcher::calculate_similarity("naruto", "one piece");
+        assert!(score < 0.3);
+    }
+
+    #[test]
+    fn test_similarity_chinese() {
+        let score = AiMatcher::calculate_similarity("火影忍者", "火影忍者");
+        assert!((score - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_similarity_chinese_partial() {
+        let score = AiMatcher::calculate_similarity("火影忍者", "火影忍者：疾风传");
+        // 包含关系：4/7 * 0.9 ≈ 0.51
+        assert!(score > 0.4);
+    }
+
+    #[test]
+    fn test_similarity_empty() {
+        assert!((AiMatcher::calculate_similarity("", "") - 1.0).abs() < 0.001);
+        assert!((AiMatcher::calculate_similarity("abc", "") - 0.0).abs() < 0.001);
+    }
+
+    // --- clean_title_prefix ---
+
+    #[test]
+    fn test_clean_prefix_bracket() {
+        assert_eq!(AiMatcher::clean_title_prefix("[TYPE.90] 火影忍者"), "火影忍者");
+    }
+
+    #[test]
+    fn test_clean_prefix_paren() {
+        assert_eq!(AiMatcher::clean_title_prefix("(C99) 进击的巨人"), "进击的巨人");
+    }
+
+    #[test]
+    fn test_clean_prefix_chinese_bracket() {
+        assert_eq!(AiMatcher::clean_title_prefix("【汉化】海贼王"), "海贼王");
+    }
+
+    #[test]
+    fn test_clean_prefix_no_prefix() {
+        assert_eq!(AiMatcher::clean_title_prefix("火影忍者"), "火影忍者");
+    }
+
+    #[test]
+    fn test_clean_prefix_multiple() {
+        assert_eq!(AiMatcher::clean_title_prefix("[C99] [TYPE.90] 火影忍者"), "火影忍者");
+    }
+
+    #[test]
+    fn test_clean_prefix_mixed() {
+        assert_eq!(AiMatcher::clean_title_prefix("[汉化] (全彩) 海贼王"), "海贼王");
+    }
+
+    // --- extract_json ---
+
+    #[test]
+    fn test_extract_json_starts_with_brace() {
+        let input = "{\"matches\": []}";
+        assert_eq!(AiMatcher::extract_json(input).unwrap(), input);
+    }
+
+    #[test]
+    fn test_extract_json_code_block() {
+        let input = "```json\n{\"key\": \"value\"}\n```";
+        assert_eq!(AiMatcher::extract_json(input).unwrap(), "{\"key\": \"value\"}");
+    }
+
+    #[test]
+    fn test_extract_json_nested() {
+        let input = "Some text before {\"matches\": [{\"a\": 1}]} after";
+        let result = AiMatcher::extract_json(input).unwrap();
+        assert!(result.contains("{\"matches\": [{\"a\": 1}]}"));
+    }
+
+    #[test]
+    fn test_extract_json_no_brace() {
+        let result = AiMatcher::extract_json("no json here");
+        assert!(result.is_err());
+    }
+
+    // --- fix_incomplete_json ---
+
+    #[test]
+    fn test_fix_missing_brace() {
+        let input = "{\"matches\": [";
+        let fixed = AiMatcher::fix_incomplete_json(input).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&fixed).is_ok());
+    }
+
+    #[test]
+    fn test_fix_missing_bracket_and_brace() {
+        let input = "{\"matches\": [{\"a\": 1}]";
+        let fixed = AiMatcher::fix_incomplete_json(input).unwrap();
+        assert!(serde_json::from_str::<serde_json::Value>(&fixed).is_ok());
+    }
+
+    #[test]
+    fn test_fix_valid_json() {
+        let input = "{\"matches\": []}";
+        let fixed = AiMatcher::fix_incomplete_json(input).unwrap();
+        assert_eq!(fixed, input);
+    }
+
+    #[test]
+    fn test_fix_unfixable() {
+        let input = "not json at all";
+        assert!(AiMatcher::fix_incomplete_json(input).is_none());
+    }
+
+    // --- parse_json_value ---
+
+    #[test]
+    fn test_parse_standard_response() {
+        let matcher = AiMatcher::new(
+            "http://localhost".to_string(),
+            None,
+            "test".to_string(),
+            "test".to_string(),
+            0.0,
+            0.8,
+            None,
+            false,
+        ).unwrap();
+
+        let website = vec![Comic {
+            aid: "1".to_string(),
+            title: "Naruto".to_string(),
+            author: "".to_string(),
+            category: "".to_string(),
+            cover_url: "".to_string(),
+            url: "".to_string(),
+            pages: 0,
+            tags: vec![],
+            upload_date: "".to_string(),
+        }];
+        let local: Vec<LocalComic> = vec![];
+
+        let json = serde_json::json!({
+            "matches": [
+                {"website_title": "Naruto", "local_title": null, "match_type": "need_download", "confidence": 0.9, "reason": "test"}
+            ]
+        });
+
+        let details = matcher.parse_json_value(json, &website, &local).unwrap();
+        assert_eq!(details.len(), 1);
+        assert_eq!(details[0].match_type, "need_download");
+    }
+
+    #[test]
+    fn test_parse_missing_match() {
+        let matcher = AiMatcher::new(
+            "http://localhost".to_string(),
+            None,
+            "test".to_string(),
+            "test".to_string(),
+            0.0,
+            0.8,
+            None,
+            false,
+        ).unwrap();
+
+        let website: Vec<Comic> = vec![];
+        let local: Vec<LocalComic> = vec![];
+
+        let json = serde_json::json!({"other": "data"});
+        let details = matcher.parse_json_value(json, &website, &local).unwrap();
+        assert!(details.is_empty());
+    }
+
+    #[test]
+    fn test_parse_empty_matches() {
+        let matcher = AiMatcher::new(
+            "http://localhost".to_string(),
+            None,
+            "test".to_string(),
+            "test".to_string(),
+            0.0,
+            0.8,
+            None,
+            false,
+        ).unwrap();
+
+        let website: Vec<Comic> = vec![];
+        let local: Vec<LocalComic> = vec![];
+
+        let json = serde_json::json!({"matches": []});
+        let details = matcher.parse_json_value(json, &website, &local).unwrap();
+        assert!(details.is_empty());
+    }
+}

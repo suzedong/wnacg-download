@@ -9,6 +9,8 @@
     "build": "tauri build",
     "build:frontend": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "lint": "eslint src --ext .ts,.vue",
     "format": "prettier --write src"
   },
@@ -38,6 +40,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
     "eslint-plugin-vue": "^10.9.1",
+    "jsdom": "^26.1.0",
     "prettier": "^3.8.2",
     "typescript": "^5.3.0",
     "vite": "^8.0.8",
