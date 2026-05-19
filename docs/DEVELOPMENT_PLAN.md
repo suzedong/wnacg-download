@@ -190,10 +190,12 @@
   - [x] 新建贡献指南（docs/CONTRIBUTING.md）
   - [x] 更新文档中心（docs/README.md）
 
-- [ ] **4.5 发布准备**
-  - [ ] 创建发布版本标签
-  - [ ] 编写 Release Notes
-  - [ ] 准备安装包
+- [x] **4.5 发布准备**
+  - [x] 创建发布版本标签（v4.0.0）
+  - [x] 编写 Release Notes（RELEASE_NOTES.md）
+  - [x] 构建 .app 产物（macOS aarch64）
+  - [ ] macOS DMG 打包（⚠️ Tauri 2.10.3 + macOS 26.5 兼容性问题，待修复）
+  - [ ] Windows NSIS 安装包（需在 Windows 环境构建）
   - [ ] 测试安装包在不同系统的兼容性
 
 #### 验收标准
@@ -212,7 +214,7 @@
 | **P0** | Phase 1 | 完善现有页面功能 | 功能闭环 | ✅ 全部完成 |
 | **P1** | Phase 2 | 完善用户体验 | 用户友好 | ✅ 全部完成 |
 | **P2** | Phase 3 | 测试优化 | 稳定可靠 | ✅ 已完成 |
-| **P3** | Phase 4 | 打包发布 | 正式发布 | 🟡 文档完成，打包进行中 |
+| **P3** | Phase 4 | 打包发布 | 正式发布 | 🟡 文档+标签完成，.app 已构建 |
 
 ---
 
@@ -220,6 +222,7 @@
 
 ### 已知问题
 1. **Worker API 下载需要非 headless 浏览器**：Cloudflare 检测 headless Chromium 并拦截，浏览器窗口会短暂可见
+2. **macOS DMG 打包失败**：Tauri 2.10.3 的 `create-dmg` 脚本与 macOS 26.5 不兼容，`bundle_dmg.sh` 收不到参数。`.app` 构建正常，DMG 需等待 Tauri 更新或在 CI 环境构建
 
 ### 技术风险
 1. **WNACG 网站结构变化**：HTML 解析可能失效
@@ -240,5 +243,5 @@
 
 ---
 
-**最后更新**: 2026-05-19（文档完善：README 重写、用户手册、贡献指南）
+**最后更新**: 2026-05-19（发布准备：v4.0.0 标签、Release Notes、.app 构建成功）
 **版本**: v4.1（下载源策略优化版）
