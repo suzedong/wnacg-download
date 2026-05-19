@@ -1,254 +1,246 @@
 # WNACG Downloader
 
-一个桌面客户端应用，支持从 wnacg.com 搜索、对比和下载汉化漫画。
+一个桌面客户端应用，支持从 wnacg.com **搜索**、**对比**和**下载**汉化漫画。
+
+<p align="center">
+  <strong>技术栈</strong>: Tauri 2 · Rust · Vue 3 · TypeScript · Playwright
+</p>
+
+---
 
 ## ✨ 特性
 
-- 🔍 **搜索漫画** - 从 wnacg.com 搜索汉化漫画
-- 📊 **智能对比** - 自动对比本地已有漫画，避免重复下载
-- ⬇️ **批量下载** - 支持并发下载、断点续传、自动重试
-- 🖥️ **桌面客户端** - Tauri 2 打包，原生体验
-- 🎨 **暗色模式** - 支持亮色/暗色主题切换
-- 📦 **系统托盘** - 最小化到后台，下载不中断
-- ⚙️ **可配置** - 支持代理、存储路径、AI 配置等
+- **搜索漫画** — 通过关键字搜索网站漫画，支持并发爬取多页，自动去重
+- **智能对比** — 自动对比本地漫画，避免重复下载（本地精确匹配 + AI 兜底）
+- **批量下载** — 并发下载、断点续传、自动重试、下载进度实时显示
+- **桌面客户端** — Tauri 2 打包，Windows / macOS 原生体验
+- **暗色模式** — 亮色 / 暗色 / 跟随系统，三种主题切换
+- **系统托盘** — 最小化到后台，下载不中断
+- **可配置** — 代理、存储路径、下载参数、AI 服务，全部可视化配置
+
+---
 
 ## 📦 安装
 
 ### 前置要求
 
-**前端开发**：
-- **Node.js** >= 18.0.0
-  - 下载地址：https://nodejs.org/
-  - 验证：`node --version`
-- **npm** / **pnpm**（推荐 pnpm）
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| Node.js | >= 18.0.0 | 前端运行时和构建工具 |
+| Rust | >= 1.75.1 | Tauri 后端编译 |
 
-**Tauri 桌面客户端开发**：
-- **Rust** >= 1.75.0
-  - 安装：https://rustup.rs/
-  - 验证：`rustc --version`
-  - 国内镜像：https://mirrors.tuna.tsinghua.edu.cn/help/rustup/
-- **Visual Studio Build Tools**（Windows）
-- **Xcode Command Line Tools**（macOS）
+**Windows**：需要 Visual Studio Build Tools（安装时勾选 "C++ build tools"）
+
+**macOS**：需要 Xcode Command Line Tools（运行 `xcode-select --install`）
 
 ### 安装步骤
 
-#### 1. 安装 Node.js
-
 ```bash
-# 访问 https://nodejs.org/ 下载 LTS 版本
-# 运行安装程序，选择默认选项
+# 1. 克隆仓库
+git clone https://github.com/YOUR-USERNAME/wnacg-download.git
+cd wnacg-download
 
-# 验证安装
-node --version
-npm --version
-```
-
-**配置 npm 镜像（推荐）**：
-```bash
-# 使用淘宝镜像
-npm config set registry https://registry.npmmirror.com
-```
-
-#### 2. 安装 Rust
-
-**Windows**：
-```bash
-# 下载安装程序（清华镜像）
-# https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe
-
-# 运行安装程序，选择默认选项
-
-# 验证安装
-rustc --version
-cargo --version
-```
-
-**配置 Cargo 镜像（推荐）**：
-```bash
-# 编辑 ~/.cargo/config.toml
-mkdir -p ~/.cargo
-cat > ~/.cargo/config.toml << EOF
-[source.crates-io]
-replace-with = 'tuna'
-
-[source.tuna]
-registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io/index.git"
-
-[net]
-git-fetch-with-cli = true
-EOF
-```
-
-#### 3. 安装项目依赖
-
-```bash
-# 使用 pnpm（推荐）
-pnpm install
-
-# 或使用 npm
+# 2. 安装依赖
 npm install
-```
 
-## 🚀 快速开始
-
-### 开发模式
-
-```bash
-# 启动 Tauri 开发模式
+# 3. 启动开发模式
 npm run dev
 ```
 
-### 构建
+### 国内镜像加速
 
 ```bash
-# 构建桌面应用
-npm run build
+# npm 镜像
+npm config set registry https://registry.npmmirror.com
+
+# Rust 镜像（编辑 ~/.cargo/config.toml）
+[source.crates-io]
+replace-with = 'tuna'
+[source.tuna]
+registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io/index.git"
+[net]
+git-fetch-with-cli = true
 ```
 
-### 代码质量
+---
 
-```bash
-# Lint 检查
-npm run lint
-
-# 格式化代码
-npm run format
-```
-
-## 📋 功能说明
+## 🚀 快速开始
 
 ### 搜索漫画
-- 通过关键字搜索 wnacg.com 的漫画
-- 支持并发爬取多页
-- 自动去重
-- 保存搜索结果到本地
 
-### 对比本地漫画
-- 对比搜索结果与本地漫画文件夹
-- 使用 AI 智能匹配漫画名称
-- 显示需要下载和已拥有的漫画
+1. 打开应用，点击左侧栏 **搜索** 图标
+2. 在搜索框中输入关键字，点击 **搜索**
+3. 等待搜索完成，结果列表会显示所有找到的漫画
+4. 点击卡片上的 **添加到队列**，加入下载队列
+
+### 对比漫画
+
+1. 点击 **对比** 图标
+2. 选择搜索缓存文件 + 本地漫画文件夹
+3. 点击 **开始对比**
+4. 查看"需下载"和"已拥有"结果，批量添加到下载队列
 
 ### 下载漫画
-- 并发下载（可配置数量）
-- 断点续传
-- 自动重试
-- 下载进度实时显示
 
-### 配置管理
-- 存储路径配置
-- 网络代理配置
-- 下载参数配置
-- AI 服务配置
-- 外观主题配置
+1. 点击 **下载** 图标
+2. 确认下载队列中的漫画
+3. 点击 **开始下载**
+4. 支持暂停、恢复、取消、重试操作
 
-## 📁 项目结构
+### 修改配置
+
+1. 点击 **设置** 图标
+2. 修改配置项（自动保存）
+3. 首次使用请务必设置 **默认存储路径**
+
+---
+
+## ⌨️ 快捷键
+
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+1` | 切换到搜索页面 |
+| `Ctrl+2` | 切换到对比页面 |
+| `Ctrl+3` | 切换到下载页面 |
+| `Ctrl+4` | 切换到设置页面 |
+| `Ctrl+D` | 切换暗色模式 |
+| `Ctrl+S` | 聚焦搜索框 |
+| `Escape` | 关闭模态框 |
+
+---
+
+## ⚙️ 配置项速查
+
+| 分组 | 配置项 | 说明 | 默认值 |
+|------|--------|------|--------|
+| **存储** | 默认存储路径 | 漫画保存位置 | 程序目录 |
+| **搜索** | 最大爬取页数 | 每次搜索最大页数，0=不限制 | 0 |
+| | 请求间隔 | 请求间隔（毫秒） | 1000ms |
+| | 只搜索汉化版 | 仅搜索"漢化"漫画 | 开启 |
+| **网络** | 启用代理 | 是否使用代理 | 关闭 |
+| | 代理地址 | 代理服务器 URL | 空 |
+| | 下载源策略 | server2（最快） / worker_api | server2 |
+| **下载** | 并发下载数 | 同时下载数（1-10） | 3 |
+| | 下载重试次数 | 失败自动重试次数 | 3 |
+| | 重试间隔 | 重试等待时间（秒） | 30 |
+| **AI** | AI API 地址 | OpenAI 兼容接口 URL | 空 |
+| | AI API Key | 接口认证密钥 | 空 |
+| | AI 模型名称 | 模型标识符 | 空 |
+| | AI 温度 | 创造性程度（0-2） | 0.0 |
+| | 匹配阈值 | 本地匹配相似度（0-1） | 0.8 |
+| **外观** | 主题 | 亮色 / 暗色 / 跟随系统 | 跟随系统 |
+
+---
+
+## 🏗️ 架构概览
+
+### 技术栈
+
+- **前端**：Vue 3.5（Composition API）、TypeScript 5.3、Vite 8
+- **后端**：Rust 2021、Tauri 2、Tokio、reqwest、scraper
+- **浏览器自动化**：Playwright（Node.js 脚本，由 Rust 派生用于绕过 Cloudflare）
+- **测试**：Vitest
+
+### 通信模式
+
+```
+前端（Vue） ← Tauri Commands（invoke） → 后端（Rust）
+前端（Vue） ← Tauri Events（listen） ← 后端（Rust）
+```
+
+事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`error`
+
+### 项目结构
 
 ```
 wnacg-download/
 ├── src/                         # 前端（Vue 3）
 │   ├── components/              # UI 组件
-│   ├── views/                   # 页面
+│   ├── views/                   # 页面（Search/Compare/Download/Config）
 │   ├── composables/             # 组合式函数
-│   ├── App.vue
-│   ├── main.ts
-│   └── index.html
+│   ├── types/                   # TypeScript 类型定义
+│   └── App.vue                  # 根组件
 ├── src-tauri/                   # Tauri 后端（Rust）
 │   ├── src/
-│   │   ├── main.rs
-│   │   ├── commands/            # Tauri Commands
+│   │   ├── main.rs              # Tauri Commands 注册
+│   │   ├── commands/            # 命令处理器
 │   │   └── core/                # 核心业务逻辑
-│   ├── Cargo.toml
-│   └── tauri.conf.json
+│   │       ├── downloader/      # 并发下载
+│   │       ├── comparer/        # 对比协调
+│   │       ├── scanner/         # 本地文件扫描
+│   │       └── ai/              # AI 匹配
+│   └── Cargo.toml
+├── scripts/                     # Playwright 脚本
 ├── docs/                        # 项目文档
-├── cache/                       # 缓存目录
+├── cache/                       # 缓存目录（运行时生成）
 ├── package.json
-├── vite.config.ts
-├── tsconfig.json
-└── README.md
+└── vite.config.ts
 ```
+
+---
 
 ## ❓ 常见问题
 
 ### Q1: Rust 下载速度慢怎么办？
 
-**A**: 使用国内镜像加速。
-
-**Windows (PowerShell)**：
-```powershell
-$env:RUSTUP_DIST_SERVER="https://mirrors.tuna.tsinghua.edu.cn/rustup"
-$env:RUSTUP_UPDATE_ROOT="https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup"
-rustup-init
-```
-
-**macOS/Linux (Bash)**：
-```bash
-export RUSTUP_DIST_SERVER=https://mirrors.tuna.tsinghua.edu.cn/rustup
-export RUSTUP_UPDATE_ROOT=https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup
-curl --proto '=https' --tlsv1.2 -sSf https://mirrors.tuna.tsinghua.edu.cn/rustup/rustup-init.sh | sh
-```
-
----
+使用国内镜像加速，见 [安装步骤](#国内镜像加速) 部分。
 
 ### Q2: Tauri 编译失败怎么办？
 
-**A**: 检查 Rust 版本和系统依赖。
+**Windows**：确保安装了 Visual Studio Build Tools + "C++ build tools"
 
-**Windows**：
-- 确保安装了 Visual Studio Build Tools
-- 确保安装了 "C++ build tools" 工作负载
-
-**macOS**：
-- 确保安装了 Xcode Command Line Tools
-- 运行 `xcode-select --install`
-
----
+**macOS**：运行 `xcode-select --install` 安装 Xcode 命令行工具
 
 ### Q3: 如何验证环境配置成功？
 
-**A**: 运行以下命令验证：
-
 ```bash
-# Node.js
-node --version          # 应 >= 18.0.0
-npm --version           # 应 >= 9.0.0
-
-# Rust
-rustc --version         # 应 >= 1.75.0
-cargo --version         # 应 >= 1.75.0
-
-# 项目依赖
-pnpm list             # 应显示所有依赖
+node --version          # >= 18.0.0
+rustc --version         # >= 1.75.1
+npm list                # 应显示所有依赖
 ```
-
----
 
 ### Q4: 开发环境需要多少磁盘空间？
 
-**A**: 大约需要 2-3GB。
-
-**详细分布**：
+大约 2-3GB：
 - Node.js: ~200MB
 - Rust: ~500MB
-- 项目依赖：~500MB
-- 构建产物：~500MB
-- 缓存：~500MB
+- 项目依赖: ~500MB
+- 构建产物: ~500MB
+- 缓存: ~500MB
 
-## ⚠️ 注意事项
+### Q5: 下载被 Cloudflare 拦截怎么办？
 
-1. **代理配置**: 由于网络原因，建议配置代理使用
-2. **请求频率**: 默认有 1 秒请求间隔，请勿修改过小
-3. **Tauri 开发**: 需要 Rust 环境，约 500MB 磁盘空间
+- 默认使用 `server2` 策略（`dl1.wn01.download`），reqwest 直连，不会被拦截
+- 如果遇到拦截，可在设置中切换下载源策略到 `worker_api`（通过 Playwright 浏览器绕过 Cloudflare）
+
+### Q6: AI 未配置，对比功能还能用吗？
+
+可以。对比采用"本地优先 + AI 兜底"策略。未配置 AI 时，本地匹配的漫画正常显示，未匹配的自动标记为需下载，不会丢失任何漫画。
 
 ---
 
-## 📚 参考链接
+## 📚 更多文档
 
-- [Node.js 官方文档](https://nodejs.org/)
-- [Rust 官方文档](https://www.rust-lang.org/)
-- [Tauri 官方文档](https://tauri.app/)
-- [Vue 3 官方文档](https://vuejs.org/)
-- [清华镜像站 Rust 镜像](https://mirrors.tuna.tsinghua.edu.cn/help/rustup/)
-- [淘宝 NPM 镜像](https://npmmirror.com/)
+- [用户使用手册](docs/USER_MANUAL.md) — 详细操作指南和故障排查
+- [需求规格](docs/REQUIREMENTS.md) — 产品功能需求
+- [架构设计](docs/ARCHITECTURE.md) — 技术架构文档
+- [界面设计](docs/UI-DESIGN.md) — UI 设计稿
+- [开发计划](docs/DEVELOPMENT_PLAN.md) — 当前开发任务
+- [贡献指南](docs/CONTRIBUTING.md) — 如何参与开发
+
+---
+
+## ⚠️ 注意事项
+
+1. **代理配置**：由于网络原因，部分地区可能需要配置代理
+2. **请求频率**：默认有 1 秒请求间隔，请尊重网站服务器
+3. **Tauri 开发**：需要 Rust 环境，约 500MB 磁盘空间
+
+---
+
+## 🤝 参与贡献
+
+欢迎提交 Issue 和 Pull Request！详细开发规范请参考 [贡献指南](docs/CONTRIBUTING.md)。
 
 ---
 
