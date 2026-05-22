@@ -3,6 +3,15 @@
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
+/// 搜索完成事件
+#[derive(Clone, Serialize)]
+pub struct SearchCompleteEvent {
+    /// 搜索关键字
+    pub keyword: String,
+    /// 漫画数量
+    pub count: u32,
+}
+
 /// 搜索进度事件
 #[derive(Clone, Serialize)]
 #[allow(dead_code)]
@@ -74,6 +83,11 @@ pub struct ErrorEvent {
 #[allow(dead_code)]
 pub fn emit_search_progress(app: &tauri::AppHandle, event: SearchProgressEvent) {
     let _ = app.emit("search_progress", event);
+}
+
+/// 发送搜索完成事件
+pub fn emit_search_complete(app: &tauri::AppHandle, event: SearchCompleteEvent) {
+    let _ = app.emit("search_complete", event);
 }
 
 /// 发送下载进度事件

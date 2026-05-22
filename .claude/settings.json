@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(curl -s -w \"\\\\n---CONTENT_TYPE---\\\\n%{content_type}\\\\n---HTTP_CODE---\\\\n%{http_code}\" -X POST \"https://d1.wcdn.date/api/generate-link\" -H \"Content-Type: application/json\" -d '{\"file_key\": \"test_key\", \"file_name\": \"test.zip\"}')",
-      "Bash(cargo check *)"
-    ]
-  }
-}

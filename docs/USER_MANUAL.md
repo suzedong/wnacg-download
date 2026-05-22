@@ -313,4 +313,4 @@
 ---
 
 **文档版本**: v1.1
-**适用版本**: WNACG Downloader v4.1+
+**适用版本**: WNACG Downloader v4.0.0+

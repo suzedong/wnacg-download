@@ -84,7 +84,7 @@ fn main() {
                 })
                 .build(app)?;
 
-            println!("🎨 WNACG Downloader v4.0 已启动");
+            println!("🎨 WNACG Downloader v4.0.0 已启动");
 
             Ok(())
         })

@@ -47,9 +47,20 @@
 项目根目录/
 ├── src/                          # 前端（Vue 3）
 │   ├── components/               # UI 组件
+│   │   ├── Sidebar.vue           # 侧边栏导航
+│   │   ├── Skeleton.vue          # 骨架屏加载组件
+│   │   └── ToastNotification.vue # Toast 通知组件
 │   ├── views/                    # 页面组件
 │   ├── composables/              # 组合式函数
+│   │   ├── useSearch.ts          # 搜索逻辑
+│   │   ├── useDownload.ts        # 下载逻辑
+│   │   ├── useCompare.ts         # 对比逻辑
+│   │   ├── useConfig.ts          # 配置逻辑
+│   │   ├── useDownloadQueue.ts   # 下载队列逻辑
+│   │   └── useToast.ts           # Toast 通知逻辑
 │   ├── types/                    # 类型定义
+│   ├── utils/                    # 工具函数
+│   │   └── format.ts             # 格式化（字节、速度、时间）
 │   ├── App.vue                   # 主组件
 │   └── main.ts                   # 入口
 ├── dist/                         # 构建产物
@@ -67,18 +78,21 @@
 │   │   │   ├── search.rs         # 搜索命令（Playwright）
 │   │   │   ├── compare.rs        # 对比命令
 │   │   │   ├── download.rs       # 下载命令
-│   │   │   ├── config.rs         # 配置命令（含 open_folder）
+│   │   │   ├── config.rs         # 配置命令（含 open_folder、get_default_save_path）
 │   │   │   └── playwright.rs     # Playwright 浏览器管理命令
 │   │   ├── core/                 # 核心业务逻辑
 │   │   │   ├── mod.rs
 │   │   │   ├── downloader/       # 下载
+│   │   │   │   ├── mod.rs
+│   │   │   │   └── session.rs    # 下载会话管理
 │   │   │   ├── comparer/         # 对比
 │   │   │   ├── scanner/          # 扫描
 │   │   │   └── ai/               # AI 匹配
 │   │   ├── config.rs             # 配置管理
 │   │   ├── events.rs             # 事件定义
 │   │   ├── types.rs              # 类型定义
-│   │   └── error.rs              # 错误类型
+│   │   ├── error.rs              # 错误类型
+│   │   └── notification.rs       # 原生通知
 │   ├── Cargo.toml
 │   ├── tauri.conf.json
 │   └── ...
@@ -396,6 +410,9 @@ impl Config {
 pub struct SearchProgressEvent {
     current: u32, total: u32, found_count: u32,
 }
+pub struct SearchCompleteEvent {
+    keyword: String, count: u32,
+}
 pub struct DownloadProgressEvent {
     task_id: String, progress: f64, speed: f64, eta: u32,
 }
@@ -465,8 +482,39 @@ pub fn get_config() -> Result<Config, String> {
 }
 
 #[tauri::command]
+pub fn save_config(config: AppConfig) -> Result<(), String> {
+    // 保存配置
+}
+
+#[tauri::command]
+pub fn reset_config() -> Result<AppConfig, String> {
+    // 重置配置
+}
+
+#[tauri::command]
 pub fn open_folder(path: String) -> Result<(), String> {
     // 系统原生打开文件夹
+}
+
+#[tauri::command]
+pub fn get_default_save_path() -> Result<String, String> {
+    // 获取系统默认保存路径
+}
+
+// commands/compare.rs
+#[tauri::command]
+pub fn save_compare_result(entry: CompareHistoryEntry) -> Result<(), String> {
+    // 保存对比结果到本地文件
+}
+
+#[tauri::command]
+pub fn load_compare_result(keyword: String) -> Result<CompareHistoryEntry, String> {
+    // 加载历史对比结果
+}
+
+#[tauri::command]
+pub async fn get_download_info(url: String) -> Result<DownloadInfo, String> {
+    // Playwright 获取下载页信息
 }
 ```
 
@@ -554,12 +602,27 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
 ### 5.4 原生通知
 
-```rust
-// 使用 Tauri 插件发送原生通知
-use tauri::Manager;
+通过 `notification.rs` 模块封装，使用 `tauri_plugin_notification`：
 
-fn send_notification(app: &AppHandle, title: &str, body: &str) {
-    app.notification().title(title).body(body).show().unwrap();
+```rust
+// notification.rs
+use tauri_plugin_notification::NotificationExt;
+
+pub fn send_notification(app: &tauri::AppHandle, title: &str, body: &str) {
+    app.notification().builder()
+        .title(title)
+        .body(body)
+        .show()
+        .unwrap_or_else(|e| eprintln!("发送通知失败：{}", e));
+}
+
+pub fn send_download_complete(app: &tauri::AppHandle, success: u32, failed: u32) {
+    let body = if failed > 0 {
+        format!("成功 {} 部，失败 {} 部", success, failed)
+    } else {
+        format!("成功下载 {} 部漫画", success)
+    };
+    send_notification(app, "下载完成", &body);
 }
 ```
 
@@ -729,4 +792,4 @@ try {
 **文档结束**
 
 **最后更新**: 2026-05-19  
-**版本**: v4.2（浏览器管理增强版）
+**版本**: v4.0.0

@@ -1,5 +1,6 @@
 // 搜索命令 - 使用 Playwright 浏览器进行搜索
 
+use crate::events::{emit_search_complete, SearchCompleteEvent};
 use crate::types::comic::Comic;
 use crate::types::search::{SearchOptions, SearchResult};
 use serde::{Deserialize, Serialize};
@@ -159,7 +160,13 @@ pub async fn search_comics(
     println!("[搜索] 结果已保存：{}", file_path);
 
     // 发送完成事件
-    let _ = app.emit("search_complete", &unique_comics);
+    emit_search_complete(
+        &app,
+        SearchCompleteEvent {
+            keyword: keyword.clone(),
+            count: unique_comics.len() as u32,
+        },
+    );
 
     // 构建搜索结果
     let result = SearchResult {

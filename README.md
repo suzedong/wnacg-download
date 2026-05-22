@@ -151,7 +151,7 @@ git-fetch-with-cli = true
 前端（Vue） ← Tauri Events（listen） ← 后端（Rust）
 ```
 
-事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`error`
+事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`playwright_install_progress`、`error`
 
 ### 项目结构
 
