@@ -79,6 +79,40 @@
         </div>
       </section>
 
+      <!-- 浏览器设置 -->
+      <section class="config-section">
+        <h3 class="section-title"><span class="section-icon">🌐</span>浏览器设置</h3>
+        <div class="form-group">
+          <label>使用系统 Chrome</label>
+          <div class="toggle-row">
+            <button
+              class="toggle-switch"
+              :class="{ active: config.use_system_chrome }"
+              @click="updateField('use_system_chrome', !config.use_system_chrome)"
+            >
+              <span class="toggle-knob"></span>
+            </button>
+            <span class="toggle-label">{{ config.use_system_chrome ? '已启用' : '未启用' }}</span>
+          </div>
+          <span class="hint">{{ config.use_system_chrome ? '使用系统已安装的 Chrome 浏览器' : '使用内置的 Chromium 浏览器（需要下载）' }}</span>
+        </div>
+        <div class="form-group">
+          <label>Playwright 浏览器状态</label>
+          <div class="status-indicator">
+            <span class="status-dot" :class="{ installed: playwrightInstalled, notInstalled: !playwrightInstalled }"></span>
+            <span class="status-text">{{ playwrightInstalled ? '✅ 已安装' : '❌ 未安装' }}</span>
+          </div>
+          <button
+            v-if="!playwrightInstalled && !config.use_system_chrome"
+            class="btn-install"
+            @click="installPlaywright"
+            :disabled="isInstalling"
+          >
+            {{ isInstalling ? '安装中...' : '📥 安装 Chromium' }}
+          </button>
+        </div>
+      </section>
+
       <!-- 网络设置 -->
       <section class="config-section">
         <h3 class="section-title"><span class="section-icon">🌐</span>网络设置</h3>
@@ -290,10 +324,14 @@
 import { ref, onMounted, onUnmounted, computed, inject } from 'vue';
 import { useConfig } from '../composables/useConfig';
 import { open } from '@tauri-apps/plugin-dialog';
+import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 const { config, error, isDirty, isSaving, lastSavedAt, validationErrors, loadConfig, resetConfig, updateField, flushPendingSave } = useConfig();
 
 const showApiKey = ref(false);
+const playwrightInstalled = ref(false);
+const isInstalling = ref(false);
 
 // 全局通知
 const notify = inject<{ success: (msg: string) => void; error: (msg: string, duration?: number, action?: { label: string; onClick: () => void }) => void; info: (msg: string) => void }>('notify');
@@ -306,11 +344,48 @@ const statusClass = computed(() => {
 
 onMounted(async () => {
   await loadConfig();
+  await checkPlaywrightInstallation();
 });
 
 onUnmounted(() => {
   flushPendingSave();
 });
+
+async function checkPlaywrightInstallation() {
+  try {
+    playwrightInstalled.value = await invoke('check_playwright_installed');
+  } catch (e) {
+    console.error('检查 Playwright 失败：', e);
+    playwrightInstalled.value = false;
+  }
+}
+
+async function installPlaywright() {
+  if (isInstalling.value) return;
+  
+  isInstalling.value = true;
+  notify?.info('正在安装 Chromium，请耐心等待...');
+  
+  try {
+    // 监听安装进度
+    const unlisten = await listen('playwright_install_progress', (event: any) => {
+      const { message, status } = event.payload;
+      console.log('[安装]', message);
+    });
+    
+    await invoke('install_playwright');
+    
+    notify?.success('Chromium 安装成功！');
+    await checkPlaywrightInstallation();
+    
+    unlisten();
+  } catch (e: any) {
+    console.error('安装 Playwright 失败：', e);
+    notify?.error(`安装失败：${e.message || e}`);
+  } finally {
+    isInstalling.value = false;
+  }
+}
 
 function formatTime(date: Date): string {
   const now = new Date();
@@ -594,6 +669,55 @@ h2 {
 .toggle-label {
   font-size: 14px;
   color: var(--text-secondary);
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.status-dot.installed {
+  background: #67c23a;
+  box-shadow: 0 0 6px rgba(103, 194, 58, 0.5);
+}
+
+.status-dot.notInstalled {
+  background: #f56c6c;
+  box-shadow: 0 0 6px rgba(245, 108, 108, 0.5);
+}
+
+.status-text {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.btn-install {
+  margin-top: 8px;
+  padding: 8px 16px;
+  background: var(--primary-gradient);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: opacity 0.2s;
+}
+
+.btn-install:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-install:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .source-select {

@@ -42,7 +42,7 @@ cargo build --release    # 发布构建
 
 - **前端 → 后端**: Tauri 命令，通过 `@tauri-apps/api/core` 的 `invoke()` 调用
 - **后端 → 前端**: Tauri 事件，通过 `@tauri-apps/api/event` 的 `listen()` 监听
-- 事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`error`
+- 事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`playwright_install_progress`、`error`
 
 ### Tauri 命令（注册于 [src-tauri/src/main.rs](src-tauri/src/main.rs)）
 
@@ -54,7 +54,8 @@ cargo build --release    # 发布构建
 | `compare_comics` | 读取缓存的搜索结果，扫描本地文件夹，本地优先匹配 + AI 兜底标题匹配 |
 | `save_compare_result`、`load_compare_result` | 对比结果持久化（保存/加载历史对比记录） |
 | `get_download_info` | 通过 Playwright 获取下载页信息（file_key、file_name、server2_url） |
-| `start_download` | 并发批量下载，支持重试和断点续传 |
+| `start_download`、`pause_download`、`resume_download`、`cancel_task`、`get_download_status` | 下载管理 |
+| `check_playwright_installed`、`install_playwright`、`check_system_chrome` | Playwright 浏览器管理 |
 | `window_minimize`、`window_maximize`、`window_close` | 窗口控制 |
 
 ### 前端结构（`src/`）
@@ -90,7 +91,7 @@ cargo build --release    # 发布构建
 
 ### 配置
 
-存储路径：`{exe_dir}/config/config.json`。主要字段：`storage_path`（存储路径）、`proxy`/`proxy_enabled`（代理）、`max_pages`（最大页数）、`request_interval`（请求间隔）、`search_chinese_only`（仅中文搜索）、`concurrent_downloads`（并发下载数，默认 3）、`retry_times`（重试次数，默认 3）、`retry_interval`（重试间隔，默认 30 秒）、`download_source_preference`（下载源策略，默认 server2）、`ai_api_url`、`ai_api_key`、`ai_model`（AI 模型名称）、`ai_prompt`（AI Prompt 模板）、`ai_temperature`（AI 温度，默认 0.0）、`match_threshold`（匹配阈值，默认 0.8）、`theme`（主题：light/dark）。
+存储路径：`{exe_dir}/config/config.json`。主要字段：`storage_path`（存储路径）、`proxy`/`proxy_enabled`（代理）、`max_pages`（最大页数）、`request_interval`（请求间隔）、`search_chinese_only`（仅中文搜索）、`concurrent_downloads`（并发下载数，默认 3）、`retry_times`（重试次数，默认 3）、`retry_interval`（重试间隔，默认 30 秒）、`download_source_preference`（下载源策略，默认 server2）、`ai_api_url`、`ai_api_key`、`ai_model`（AI 模型名称）、`ai_prompt`（AI Prompt 模板）、`ai_temperature`（AI 温度，默认 0.0）、`match_threshold`（匹配阈值，默认 0.8）、`theme`（主题：light/dark/auto）、`use_system_chrome`（使用系统 Chrome，默认 false）。
 
 ### 缓存
 
@@ -430,5 +431,5 @@ alert('Download complete!');
 
 ---
 
-**最后更新**: 2026-05-17  
-**版本**: v4.0（纯桌面端重构版）
+**最后更新**: 2026-05-19  
+**版本**: v4.1（浏览器管理增强版）

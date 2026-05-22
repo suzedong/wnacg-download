@@ -257,6 +257,9 @@ pub mod config {
         /// 下载源优先策略：server2 | worker_api | auto
         #[serde(default)]
         pub download_source_preference: String,
+        /// 是否使用系统已安装的 Chrome
+        #[serde(default)]
+        pub use_system_chrome: bool,
     }
 
     impl Default for AppConfig {
@@ -279,6 +282,7 @@ pub mod config {
                 match_threshold: 0.8,
                 theme: "auto".to_string(),
                 download_source_preference: "server2".to_string(),
+                use_system_chrome: false,
             }
         }
     }

@@ -2,6 +2,56 @@
 // 使用方法：node search_with_playwright.js "keyword"
 
 import { chromium } from 'playwright';
+import { readFileSync, existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// 获取配置路径
+function getConfigPath() {
+  // 优先使用环境变量指定的路径
+  if (process.env.WNACG_CONFIG_PATH) {
+    console.error(`[脚本] 使用环境变量指定的配置: ${process.env.WNACG_CONFIG_PATH}`);
+    if (existsSync(process.env.WNACG_CONFIG_PATH)) {
+      return process.env.WNACG_CONFIG_PATH;
+    }
+  }
+  
+  // 尝试多个可能的配置位置
+  const possiblePaths = [
+    // 开发环境（相对于项目根目录）
+    join(process.cwd(), 'config', 'config.json'),
+    // 构建后（相对于脚本位置）
+    join(dirname(fileURLToPath(import.meta.url)), '..', 'config', 'config.json'),
+  ];
+  
+  for (const configPath of possiblePaths) {
+    if (existsSync(configPath)) {
+      return configPath;
+    }
+  }
+  
+  console.error(`[脚本] 配置文件未找到，尝试路径:`, possiblePaths);
+  return null;
+}
+
+// 读取配置
+function loadConfig() {
+  const configPath = getConfigPath();
+  if (!configPath) {
+    console.error(`[脚本] 配置文件未找到，使用默认设置`);
+    return { use_system_chrome: false };
+  }
+  
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const config = JSON.parse(content);
+    console.error(`[脚本] 已加载配置: ${configPath}`);
+    return config;
+  } catch (e) {
+    console.error(`[脚本] 读取配置失败: ${e.message}，使用默认设置`);
+    return { use_system_chrome: false };
+  }
+}
 
 // 分类映射表
 const CATEGORY_MAP = {
@@ -44,13 +94,66 @@ function getCategoryFromElement(element) {
 }
 
 async function search(keyword, pageNum = 1) {
-  console.error(`[脚本] 启动浏览器...`);
+  // 读取配置
+  const config = loadConfig();
+  const useSystemChrome = config.use_system_chrome || false;
   
-  // 启动浏览器
-  const browser = await chromium.launch({
+  console.error(`[脚本] 启动浏览器...`);
+  console.error(`[脚本] 浏览器模式: ${useSystemChrome ? '系统 Chrome' : '内置 Chromium'}`);
+  
+  let browser;
+  
+  const launchOptions = {
     headless: false,
     args: ['--no-first-run', '--no-default-browser-check']
-  });
+  };
+  
+  if (useSystemChrome) {
+    // 使用系统 Chrome
+    console.error(`[脚本] 尝试使用系统 Chrome...`);
+    
+    // macOS 上的 Chrome 路径
+    const chromePaths = [
+      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+      '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      `${process.env.HOME}/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`,
+    ];
+    
+    let chromeExecutable = null;
+    for (const path of chromePaths) {
+      if (existsSync(path)) {
+        chromeExecutable = path;
+        break;
+      }
+    }
+    
+    if (chromeExecutable) {
+      console.error(`[脚本] 找到系统 Chrome: ${chromeExecutable}`);
+      launchOptions.executablePath = chromeExecutable;
+    } else {
+      console.error(`[脚本] 未找到系统 Chrome，尝试使用内置 Chromium`);
+    }
+  }
+  
+  // 尝试启动浏览器
+  try {
+    browser = await chromium.launch(launchOptions);
+  } catch (launchError) {
+    console.error(`[脚本] 浏览器启动失败: ${launchError.message}`);
+    
+    if (useSystemChrome) {
+      console.error(`[脚本] 系统 Chrome 不可用，尝试使用内置 Chromium...`);
+      // 重新尝试使用内置 Chromium
+      delete launchOptions.executablePath;
+      try {
+        browser = await chromium.launch(launchOptions);
+      } catch (innerError) {
+        throw new Error(`浏览器启动失败：${innerError.message}\n请在设置中安装 Chromium 或启用"使用系统 Chrome"并确保已安装 Chrome。`);
+      }
+    } else {
+      throw new Error(`浏览器启动失败：${launchError.message}\n请在设置页面中安装 Chromium。`);
+    }
+  }
 
   const context = await browser.newContext();
   const newPage = await context.newPage();

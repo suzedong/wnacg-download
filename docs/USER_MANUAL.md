@@ -198,6 +198,19 @@
 | 代理地址 | 代理服务器 URL | 空 |
 | 下载源策略 | server2（最快） / worker_api（绕过 Cloudflare） | server2 |
 
+### 浏览器
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| 使用系统 Chrome | 使用系统已安装的 Chrome/Chromium 替代 Playwright 内置浏览器 | 关闭 |
+| Playwright 状态 | 显示当前 Playwright Chromium 的安装状态 | - |
+| 安装 Playwright | 一键安装 Playwright Chromium（如未安装） | - |
+
+**说明**：
+- **使用系统 Chrome**：开启后，程序将使用系统中已安装的 Chrome 浏览器进行搜索，无需下载庞大的 Playwright Chromium
+- **安装 Playwright**：如果选择不使用系统 Chrome，且 Playwright 未安装时，可点击此按钮安装。安装过程中会显示实时进度。
+- **网络问题**：如果 Playwright 安装失败并提示网络错误，请先配置好代理后再重试。
+
 ### 下载
 
 | 配置项 | 说明 | 默认值 |
@@ -273,6 +286,23 @@
 2. **检查代理延迟**：尝试关闭代理后重试
 3. **下载源策略**：切换到 `server2` 策略（最快）
 
+### 浏览器问题
+
+1. **Playwright 未安装**：
+   - 如果搜索时提示浏览器未安装，前往设置页面的"浏览器"部分
+   - 可以选择开启"使用系统 Chrome"（推荐）
+   - 或者点击"安装 Playwright"按钮进行安装
+
+2. **Playwright 安装失败**：
+   - 如果安装过程中提示网络错误，请先在"网络"部分配置好代理
+   - 安装前程序会自动清理可能存在的锁文件
+   - 如仍失败，可以选择使用系统 Chrome
+
+3. **系统 Chrome 未检测到**：
+   - 确保系统中已安装 Chrome 或 Chromium
+   - macOS 下通常安装在 `/Applications/Google Chrome.app`
+   - Windows 下通常安装在 `C:\Program Files\Google\Chrome\Application\chrome.exe`
+
 ### 其他问题
 
 如果以上方法无法解决，请尝试：
@@ -282,5 +312,5 @@
 
 ---
 
-**文档版本**: v1.0
-**适用版本**: WNACG Downloader v4.0+
+**文档版本**: v1.1
+**适用版本**: WNACG Downloader v4.1+

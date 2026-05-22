@@ -120,4 +120,6 @@ export interface AppConfig {
   theme: string;
   /// 下载源优先策略：server2 | worker_api | auto
   download_source_preference: string;
+  /// 是否使用系统已安装的 Chrome
+  use_system_chrome: boolean;
 }

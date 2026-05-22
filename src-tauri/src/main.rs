@@ -108,6 +108,10 @@ fn main() {
             commands::download::resume_download,
             commands::download::cancel_task,
             commands::download::get_download_status,
+            // Playwright 管理命令
+            commands::playwright::check_playwright_installed,
+            commands::playwright::install_playwright,
+            commands::playwright::check_system_chrome,
             // 窗口控制
             window_minimize,
             window_maximize,

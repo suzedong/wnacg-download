@@ -160,6 +160,7 @@ import { Comic } from '../types/index';
 import { readDir, readTextFile, remove, stat } from '@tauri-apps/plugin-fs';
 import { resourceDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-shell';
+import { invoke } from '@tauri-apps/api/core';
 
 const keyword = ref('');
 const searchInput = ref(null);
@@ -176,6 +177,9 @@ const { addToQueue } = useDownloadQueue();
 
 // 全局通知
 const notify = inject<{ success: (msg: string) => void; error: (msg: string, duration?: number, action?: { label: string; onClick: () => void }) => void; info: (msg: string) => void }>('notify');
+
+// 页面切换函数
+const switchView = inject<(viewId: string) => void>('switchView');
 
 // 搜索失败时弹出 Toast 通知（带重试按钮）
 let lastSearchError = '';
@@ -378,6 +382,38 @@ function closeHistoryModal() {
 
 async function handleSearch() {
   if (!keyword.value.trim()) return;
+
+  // 检查浏览器状态
+  try {
+    const playwrightInstalled = await invoke('check_playwright_installed');
+    const systemChromeInstalled = await invoke('check_system_chrome');
+    const config = await invoke('get_config') as any;
+    const useSystemChrome = config.use_system_chrome || false;
+
+    // 检查是否满足条件
+    if (useSystemChrome && !systemChromeInstalled) {
+      notify?.error('系统 Chrome 未找到，请安装 Chrome 或禁用"使用系统 Chrome"', 0, { 
+        label: '去设置', 
+        onClick: () => {
+          switchView?.('config');
+        } 
+      });
+      return;
+    }
+
+    if (!useSystemChrome && !playwrightInstalled) {
+      notify?.error('Chromium 未安装，请去设置页安装或启用"使用系统 Chrome"', 0, { 
+        label: '去设置', 
+        onClick: () => {
+          switchView?.('config');
+        } 
+      });
+      return;
+    }
+  } catch (e) {
+    console.error('检查浏览器状态失败：', e);
+    // 如果检查失败，继续尝试搜索
+  }
 
   const options = {
     max_pages: 0,

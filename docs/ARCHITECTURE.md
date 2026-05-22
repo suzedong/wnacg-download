@@ -67,7 +67,8 @@
 │   │   │   ├── search.rs         # 搜索命令（Playwright）
 │   │   │   ├── compare.rs        # 对比命令
 │   │   │   ├── download.rs       # 下载命令
-│   │   │   └── config.rs         # 配置命令（含 open_folder）
+│   │   │   ├── config.rs         # 配置命令（含 open_folder）
+│   │   │   └── playwright.rs     # Playwright 浏览器管理命令
 │   │   ├── core/                 # 核心业务逻辑
 │   │   │   ├── mod.rs
 │   │   │   ├── downloader/       # 下载
@@ -318,6 +319,34 @@ impl Scanner {
 }
 ```
 
+#### 3.2.6 Playwright 浏览器管理模块（playwright）
+
+```rust
+// commands/playwright.rs
+pub fn check_playwright_installed() -> Result<bool, String> {
+    // 检查 Playwright Chromium 是否已安装
+}
+
+pub async fn install_playwright(app: AppHandle) -> Result<bool, String> {
+    // 1. 清理可能的锁文件
+    // 2. 运行 npx playwright install chromium
+    // 3. 通过 playwright_install_progress 事件发送进度
+    // 4. 检测网络错误并提示
+}
+
+pub fn check_system_chrome() -> Result<bool, String> {
+    // 检查系统是否已安装 Chrome/Chromium
+}
+```
+
+**关键特性**：
+- 自动检测 Playwright 安装状态
+- 支持一键安装 Playwright Chromium
+- 安装前自动清理锁文件避免冲突
+- 实时进度事件推送（`playwright_install_progress`）
+- 网络错误自动检测并提示
+- 支持使用系统 Chrome 替代内置浏览器
+
 ### 3.3 配置管理
 
 **配置文件路径**：程序目录下的 `config/config.json`
@@ -340,8 +369,9 @@ pub struct AppConfig {
     pub ai_prompt: String,
     pub ai_temperature: f64,
     pub match_threshold: f64,
-    pub theme: String, // "light" 或 "dark"
+    pub theme: String, // "light" 或 "dark" 或 "auto"
     pub download_source_preference: String, // "server2" | "worker_api"
+    pub use_system_chrome: bool, // 是否使用系统 Chrome
 }
 
 impl Config {
@@ -383,6 +413,8 @@ pub struct DownloadCompleteEvent {
 pub struct ErrorEvent {
     message: String,
 }
+// playwright_install_progress 是动态 JSON 事件
+// 包含 message、status（downloading/installing/success/error）、is_network_error
 
 // 通过 app.emit("event_name", event) 推送到前端
 ```
@@ -696,5 +728,5 @@ try {
 
 **文档结束**
 
-**最后更新**: 2026-05-17  
-**版本**: v4.1（下载源策略优化版）
+**最后更新**: 2026-05-19  
+**版本**: v4.2（浏览器管理增强版）

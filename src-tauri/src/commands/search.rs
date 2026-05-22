@@ -180,7 +180,16 @@ fn run_playwright_script(
     keyword: &str,
     page: u32,
 ) -> Result<PlaywrightResult, String> {
+    // 获取配置路径
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_default());
+    let config_path = exe_dir.join("config").join("config.json");
+    let config_path_str = config_path.to_string_lossy().to_string();
+    
     let output = Command::new("node")
+        .env("WNACG_CONFIG_PATH", &config_path_str)
         .arg(script_path)
         .arg(keyword)
         .arg(page.to_string())
