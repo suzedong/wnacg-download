@@ -236,14 +236,47 @@ npm list                # 应显示所有依赖
 
 ---
 
+## 🤝 参与贡献
+
+### 开发工作流
+
+```
+main                    # 主分支，随时可发布
+├── feature/xxx         # 新功能分支
+├── fix/xxx             # Bug 修复分支
+└── refactor/xxx        # 重构分支
+```
+
+1. Fork 仓库并创建分支：`git checkout -b feature/your-feature`
+2. 开发功能，运行检查：`npm run lint && npm run format && npm run build`
+3. 提交代码：`git commit -m "feat: 描述变更"`
+4. 发起 Pull Request，描述功能和测试方法
+
+### 编码规范
+
+- 所有注释、日志、用户提示使用**中文**
+- TypeScript 严格模式，避免 `any`，类型定义统一在 `src/types/index.ts`
+- Vue 使用 `<script setup>` 语法，组件 PascalCase 命名
+- Rust 使用 `thiserror` 错误处理，中文错误信息
+- Git 提交格式：`<type>: <subject>`（feat/fix/docs/refactor/test/chore）
+
+### 测试
+
+```bash
+npm test              # 前端测试
+cd src-tauri && cargo test  # Rust 测试
+```
+
+欢迎提交 Issue 和 Pull Request！
+
+---
+
 ## 📚 更多文档
 
 - [用户使用手册](docs/USER_MANUAL.md) — 详细操作指南和故障排查
 - [需求规格](docs/REQUIREMENTS.md) — 产品功能需求
 - [架构设计](docs/ARCHITECTURE.md) — 技术架构文档
 - [界面设计](docs/UI-DESIGN.md) — UI 设计稿
-- [开发计划](docs/DEVELOPMENT_PLAN.md) — 当前开发任务
-- [贡献指南](docs/CONTRIBUTING.md) — 如何参与开发
 
 ---
 

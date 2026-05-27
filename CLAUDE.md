@@ -433,3 +433,14 @@ alert('Download complete!');
 
 **最后更新**: 2026-05-19  
 **版本**: v4.0.0
+
+---
+
+## 新对话启动清单
+
+每次新会话开始时，请自动读取以下文件（按优先级）：
+
+1. `.claude/PROJECT_MEMORY.md` — 项目进度、开发任务、已知问题
+2. `docs/REQUIREMENTS.md` — 功能需求规格
+3. `docs/ARCHITECTURE.md` — 架构设计文档
+4. `docs/UI-DESIGN.md` — 界面设计规范
