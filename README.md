@@ -66,32 +66,12 @@ git-fetch-with-cli = true
 
 ## 🚀 快速开始
 
-### 搜索漫画
+1. **搜索**：左侧栏点击「搜索」→ 输入关键字 → 点击卡片「添加到队列」
+2. **对比**：点击「对比」→ 选择搜索缓存 + 本地漫画文件夹 → 查看"需下载/已拥有"结果
+3. **下载**：点击「下载」→ 确认队列 → 开始下载（支持暂停 / 恢复 / 取消 / 重试）
+4. **设置**：点击「设置」→ 首次使用请设置**默认存储路径**
 
-1. 打开应用，点击左侧栏 **搜索** 图标
-2. 在搜索框中输入关键字，点击 **搜索**
-3. 等待搜索完成，结果列表会显示所有找到的漫画
-4. 点击卡片上的 **添加到队列**，加入下载队列
-
-### 对比漫画
-
-1. 点击 **对比** 图标
-2. 选择搜索缓存文件 + 本地漫画文件夹
-3. 点击 **开始对比**
-4. 查看"需下载"和"已拥有"结果，批量添加到下载队列
-
-### 下载漫画
-
-1. 点击 **下载** 图标
-2. 确认下载队列中的漫画
-3. 点击 **开始下载**
-4. 支持暂停、恢复、取消、重试操作
-
-### 修改配置
-
-1. 点击 **设置** 图标
-2. 修改配置项（自动保存）
-3. 首次使用请务必设置 **默认存储路径**
+详细操作流程见 [docs/用户手册.md](docs/用户手册.md)。
 
 ---
 
@@ -99,10 +79,7 @@ git-fetch-with-cli = true
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Ctrl+1` | 切换到搜索页面 |
-| `Ctrl+2` | 切换到对比页面 |
-| `Ctrl+3` | 切换到下载页面 |
-| `Ctrl+4` | 切换到设置页面 |
+| `Ctrl+1` ~ `Ctrl+4` | 切换到搜索 / 对比 / 下载 / 设置页面 |
 | `Ctrl+D` | 切换暗色模式 |
 | `Ctrl+S` | 聚焦搜索框 |
 | `Escape` | 关闭模态框 |
@@ -114,183 +91,98 @@ git-fetch-with-cli = true
 | 分组 | 配置项 | 说明 | 默认值 |
 |------|--------|------|--------|
 | **存储** | 默认存储路径 | 漫画保存位置 | 程序目录 |
-| **搜索** | 最大爬取页数 | 每次搜索最大页数，0=不限制 | 0 |
-| | 请求间隔 | 请求间隔（毫秒） | 1000ms |
+| **搜索** | 最大爬取页数 | 0=不限制 | 0 |
+| | 请求间隔 | 毫秒 | 1000 |
 | | 只搜索汉化版 | 仅搜索"漢化"漫画 | 开启 |
-| **网络** | 启用代理 | 是否使用代理 | 关闭 |
-| | 代理地址 | 代理服务器 URL | 空 |
-| | 下载源策略 | server2（最快） / worker_api | server2 |
-| **下载** | 并发下载数 | 同时下载数（1-10） | 3 |
-| | 下载重试次数 | 失败自动重试次数 | 3 |
-| | 重试间隔 | 重试等待时间（秒） | 30 |
-| **AI** | AI API 地址 | OpenAI 兼容接口 URL | 空 |
-| | AI API Key | 接口认证密钥 | 空 |
-| | AI 模型名称 | 模型标识符 | 空 |
-| | AI Prompt | AI 匹配提示词 | 内置模板 |
-| | AI 温度 | 创造性程度（0-2） | 0.0 |
+| **网络** | 启用代理 / 代理地址 | 是否使用代理 | 关闭 |
+| | 下载源策略 | server2（最快）/ worker_api | server2 |
+| **下载** | 并发下载数 | 1-10 | 3 |
+| | 重试次数 / 间隔 | 次 / 秒 | 3 / 30 |
+| **AI** | API 地址 / Key / 模型 / Prompt | OpenAI 兼容接口 | 空 |
 | | 匹配阈值 | 本地匹配相似度（0-1） | 0.8 |
-| **浏览器** | 使用系统 Chrome | 使用已安装 Chrome 而非 Playwright | 关闭 |
-| | Playwright 状态 | Chromium 安装状态（显示/安装） | 可安装 |
+| **浏览器** | 使用系统 Chrome | 跳过 Playwright Chromium | 关闭 |
 | **外观** | 主题 | 亮色 / 暗色 / 跟随系统 | 跟随系统 |
 
----
-
-## 🏗️ 架构概览
-
-### 技术栈
-
-- **前端**：Vue 3.5（Composition API）、TypeScript 5.3、Vite 8
-- **后端**：Rust 2021、Tauri 2、Tokio、reqwest、scraper
-- **浏览器自动化**：Playwright（Node.js 脚本，由 Rust 派生用于绕过 Cloudflare）
-- **测试**：Vitest
-
-### 通信模式
-
-```
-前端（Vue） ← Tauri Commands（invoke） → 后端（Rust）
-前端（Vue） ← Tauri Events（listen） ← 后端（Rust）
-```
-
-事件类型：`search_progress`、`search_complete`、`download_progress`、`download_complete`、`compare_progress`、`ai_progress`、`playwright_install_progress`、`error`
-
-### 项目结构
-
-```
-wnacg-download/
-├── src/                         # 前端（Vue 3）
-│   ├── components/              # UI 组件
-│   ├── views/                   # 页面（Search/Compare/Download/Config）
-│   ├── composables/             # 组合式函数
-│   ├── types/                   # TypeScript 类型定义
-│   └── App.vue                  # 根组件
-├── src-tauri/                   # Tauri 后端（Rust）
-│   ├── src/
-│   │   ├── main.rs              # Tauri Commands 注册
-│   │   ├── commands/            # 命令处理器
-│   │   └── core/                # 核心业务逻辑
-│   │       ├── downloader/      # 并发下载
-│   │       ├── comparer/        # 对比协调
-│   │       ├── scanner/         # 本地文件扫描
-│   │       └── ai/              # AI 匹配
-│   └── Cargo.toml
-├── scripts/                     # Playwright 脚本
-├── docs/                        # 项目文档
-├── cache/                       # 缓存目录（运行时生成）
-├── package.json
-└── vite.config.ts
-```
+完整字段说明见 [CODE_WIKI.md](CODE_WIKI.md) 配置章节。
 
 ---
 
 ## ❓ 常见问题
 
-### Q1: Rust 下载速度慢怎么办？
+### Q1: Rust / npm 下载慢怎么办？
 
 使用国内镜像加速，见 [安装步骤](#国内镜像加速) 部分。
 
-### Q2: Tauri 编译失败怎么办？
+### Q2: Tauri 编译失败？
 
-**Windows**：确保安装了 Visual Studio Build Tools + "C++ build tools"
+- **Windows**：确保安装了 Visual Studio Build Tools + "C++ build tools"
+- **macOS**：运行 `xcode-select --install`
 
-**macOS**：运行 `xcode-select --install` 安装 Xcode 命令行工具
+### Q3: 下载被 Cloudflare 拦截？
 
-### Q3: 如何验证环境配置成功？
+默认 `server2` 策略（`dl1.wn01.download`）reqwest 直连，不会被拦截。如遇拦截，可在设置中切换到 `worker_api`（Playwright 绕过）。
 
-```bash
-node --version          # >= 18.0.0
-rustc --version         # >= 1.75.1
-npm list                # 应显示所有依赖
-```
+### Q4: AI 未配置，对比还能用吗？
 
-### Q4: 开发环境需要多少磁盘空间？
+可以。「本地优先 + AI 兜底」策略下，未配置 AI 时本地匹配正常，未匹配项自动标记为需下载，不会丢失。
 
-大约 2-3GB：
-- Node.js: ~200MB
-- Rust: ~500MB
-- 项目依赖: ~500MB
-- 构建产物: ~500MB
-- 缓存: ~500MB
+### Q5: 搜索需要安装浏览器吗？
 
-### Q5: 下载被 Cloudflare 拦截怎么办？
+**推荐**：在设置中启用「使用系统 Chrome」，无需额外下载。
 
-- 默认使用 `server2` 策略（`dl1.wn01.download`），reqwest 直连，不会被拦截
-- 如果遇到拦截，可在设置中切换下载源策略到 `worker_api`（通过 Playwright 浏览器绕过 Cloudflare）
+**可选**：让应用下载 Playwright Chromium（约 150MB），需要先配置代理。
 
-### Q6: AI 未配置，对比功能还能用吗？
+### Q6: 下载浏览器失败？
 
-可以。对比采用"本地优先 + AI 兜底"策略。未配置 AI 时，本地匹配的漫画正常显示，未匹配的自动标记为需下载，不会丢失任何漫画。
+- 锁文件 → 系统会自动清理重试
+- 网络问题 → 先在设置中配置代理
+- 或直接启用「使用系统 Chrome」跳过
 
-### Q7: 搜索需要安装浏览器吗？
-
-**推荐方案**：在设置中启用"使用系统 Chrome"，不需要额外下载浏览器。
-
-**可选方案**：下载 Playwright Chromium（约 150MB），需要配置代理才能正常下载。
-
-**注意**：搜索前会自动检查浏览器状态并提示安装或配置。
-
-### Q8: 下载浏览器失败怎么办？
-
-- 如果提示"锁文件"：系统会自动清理并重试
-- 如果是网络问题：提示会告知检查代理设置，可先在设置中配置代理再安装
-- 或者直接启用"使用系统 Chrome"跳过浏览器下载
+更多问题见 [docs/用户手册.md](docs/用户手册.md)。
 
 ---
 
 ## 🤝 参与贡献
 
-### 开发工作流
+开发前请先阅读 [AGENTS.md](AGENTS.md) — **唯一开发规范源**。
 
-```
-main                    # 主分支，随时可发布
-├── feature/xxx         # 新功能分支
-├── fix/xxx             # Bug 修复分支
-└── refactor/xxx        # 重构分支
-```
+### 简要流程
 
 1. Fork 仓库并创建分支：`git checkout -b feature/your-feature`
-2. 开发功能，运行检查：`npm run lint && npm run format && npm run build`
-3. 提交代码：`git commit -m "feat: 描述变更"`
-4. 发起 Pull Request，描述功能和测试方法
+2. 开发并通过检查：`npm run lint && npm run format && npm run build && npm test`
+3. 提交：`git commit -m "feat: 描述变更"`
+4. 发起 Pull Request
 
-### 编码规范
+### 关键约定
 
 - 所有注释、日志、用户提示使用**中文**
-- TypeScript 严格模式，避免 `any`，类型定义统一在 `src/types/index.ts`
-- Vue 使用 `<script setup>` 语法，组件 PascalCase 命名
-- Rust 使用 `thiserror` 错误处理，中文错误信息
-- Git 提交格式：`<type>: <subject>`（feat/fix/docs/refactor/test/chore）
+- TypeScript 严格模式，禁用 `any`，类型集中在 `src/types/index.ts`
+- Vue 用 `<script setup>`，Rust 用 `thiserror` 错误处理
+- Git 提交格式：`<type>: <subject>`（feat / fix / docs / refactor / test / chore）
 
-### 测试
-
-```bash
-npm test              # 前端测试
-cd src-tauri && cargo test  # Rust 测试
-```
-
-欢迎提交 Issue 和 Pull Request！
+详细规范见 [AGENTS.md](AGENTS.md)。
 
 ---
 
-## 📚 更多文档
+## 📚 文档导航
 
-- [用户使用手册](docs/USER_MANUAL.md) — 详细操作指南和故障排查
-- [需求规格](docs/REQUIREMENTS.md) — 产品功能需求
-- [架构设计](docs/ARCHITECTURE.md) — 技术架构文档
-- [界面设计](docs/UI-DESIGN.md) — UI 设计稿
+| 文档 | 用途 |
+|------|------|
+| [AGENTS.md](AGENTS.md) | 开发规则与规范（开发前必读） |
+| [CODE_WIKI.md](CODE_WIKI.md) | 代码实现文档（架构、命令、事件、配置字段） |
+| [docs/需求规格.md](docs/需求规格.md) | 功能需求与业务规则 |
+| [docs/架构设计.md](docs/架构设计.md) | 技术架构蓝图 |
+| [docs/界面设计.md](docs/界面设计.md) | UI 布局与视觉设计 |
+| [docs/用户手册.md](docs/用户手册.md) | 终端用户操作指南 |
+| [docs/项目进度.md](docs/项目进度.md) | 版本、Phase、待办、已知问题 |
 
 ---
 
 ## ⚠️ 注意事项
 
 1. **代理配置**：由于网络原因，部分地区可能需要配置代理
-2. **请求频率**：默认有 1 秒请求间隔，请尊重网站服务器
-3. **Tauri 开发**：需要 Rust 环境，约 500MB 磁盘空间
-
----
-
-## 🤝 参与贡献
-
-欢迎提交 Issue 和 Pull Request！详细开发规范请参考 [贡献指南](docs/CONTRIBUTING.md)。
+2. **请求频率**：默认 1 秒请求间隔，请尊重网站服务器
+3. **磁盘空间**：开发环境约需 2-3GB（Rust 工具链 + 依赖 + 构建产物）
 
 ---
 
