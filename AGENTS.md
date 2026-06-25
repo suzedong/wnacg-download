@@ -23,7 +23,7 @@
 | 优先级 | 文档 | 何时必读 |
 |--------|------|---------|
 | 🔴 P0 必读 | `AGENTS.md`（本文档） | 任何任务开始前 |
-| 🟠 P1 强烈推荐 | `CODE_WIKI.md` | 涉及代码改动、模块交互、命令调用前 |
+| 🟠 P1 强烈推荐 | `docs/CODE_WIKI.md` | 涉及代码改动、模块交互、命令调用前 |
 | 🟡 P2 按需 | `docs/需求规格.md` | 实现新业务功能、修改业务规则前 |
 | 🟡 P2 按需 | `docs/架构设计.md` | 涉及模块边界、通信机制变更前 |
 | 🟡 P2 按需 | `docs/界面设计.md` | 实现/修改 UI 前 |
@@ -34,20 +34,20 @@
 
 | 任务类型 | 必读文档 | 参考文档 |
 |---------|---------|---------|
-| 🐛 修复 Bug | `AGENTS.md` + `CODE_WIKI.md` | `docs/项目进度.md`（已知问题） |
-| ✨ 新增业务功能 | `AGENTS.md` + `CODE_WIKI.md` | `docs/需求规格.md` + `docs/界面设计.md` |
-| 🎨 修改 UI | `AGENTS.md` + `CODE_WIKI.md`（前端章节） | `docs/界面设计.md` |
-| 🌐 修改搜索/爬取 | `AGENTS.md` + `CODE_WIKI.md`（搜索流程） | `docs/需求规格.md`（搜索规则） |
-| ⬇️ 修改下载逻辑 | `AGENTS.md` + `CODE_WIKI.md`（下载器） | `docs/需求规格.md`（下载规则） |
-| 🤖 修改 AI 匹配 | `AGENTS.md` + `CODE_WIKI.md`（AI 模块） | `docs/需求规格.md`（AI 匹配规则） |
-| 🔧 重构 | `AGENTS.md` + `CODE_WIKI.md` + `docs/架构设计.md` | - |
+| 🐛 修复 Bug | `AGENTS.md` + `docs/CODE_WIKI.md` | `docs/项目进度.md`（已知问题） |
+| ✨ 新增业务功能 | `AGENTS.md` + `docs/CODE_WIKI.md` | `docs/需求规格.md` + `docs/界面设计.md` |
+| 🎨 修改 UI | `AGENTS.md` + `docs/CODE_WIKI.md`（前端章节） | `docs/界面设计.md` |
+| 🌐 修改搜索/爬取 | `AGENTS.md` + `docs/CODE_WIKI.md`（搜索流程） | `docs/需求规格.md`（搜索规则） |
+| ⬇️ 修改下载逻辑 | `AGENTS.md` + `docs/CODE_WIKI.md`（下载器） | `docs/需求规格.md`（下载规则） |
+| 🤖 修改 AI 匹配 | `AGENTS.md` + `docs/CODE_WIKI.md`（AI 模块） | `docs/需求规格.md`（AI 匹配规则） |
+| 🔧 重构 | `AGENTS.md` + `docs/CODE_WIKI.md` + `docs/架构设计.md` | - |
 | 📝 文档更新 | `AGENTS.md`（§开发流程） | - |
 
 ### Step 4 - 关键规则（最重要 ⚠️）
 
 #### 规则 1：现状 vs 蓝图，以现状为准
 
-- `CODE_WIKI.md` 描述**代码现状**（实际已实现的模块、命令、事件、配置字段）
+- `docs/CODE_WIKI.md` 描述**代码现状**（实际已实现的模块、命令、事件、配置字段）
 - `docs/需求规格.md` / `架构设计.md` / `界面设计.md` 描述**设计蓝图**（理想形态，可能未完全实现）
 - **当两者冲突时，以 `CODE_WIKI.md` 为准**
 - 如需实现蓝图中的新设计，需先确认范围，再同步更新 `CODE_WIKI.md`
@@ -56,9 +56,9 @@
 
 | 代码变更 | 必须同步更新 |
 |---------|------------|
-| 新增/修改 Tauri 命令 | `CODE_WIKI.md`（命令章节） |
-| 新增/修改事件类型 | `CODE_WIKI.md`（事件章节）+ `docs/架构设计.md` |
-| 新增/修改配置字段 | `CODE_WIKI.md`（配置章节）+ `docs/需求规格.md`（如对用户可见） |
+| 新增/修改 Tauri 命令 | `docs/CODE_WIKI.md`（命令章节） |
+| 新增/修改事件类型 | `docs/CODE_WIKI.md`（事件章节）+ `docs/架构设计.md` |
+| 新增/修改配置字段 | `docs/CODE_WIKI.md`（配置章节）+ `docs/需求规格.md`（如对用户可见） |
 | 新增/修改业务规则 | `docs/需求规格.md` |
 | 修改开发规范 | 仅修改 `AGENTS.md`（唯一规范源） |
 | 阶段性进展、Bug、风险 | `docs/项目进度.md` |
@@ -76,7 +76,7 @@
 1. **先讨论** — 有新想法或分歧时，先沟通确认方向
 2. **改文档** — 需求变更更新 `docs/需求规格.md`，架构变更更新 `docs/架构设计.md`，界面变更更新 `docs/界面设计.md`
 3. **后编码** — 文档确认后再写代码
-4. **同步更新** — 代码修改完成后，同步更新 `CODE_WIKI.md`，保持文档与代码一致
+4. **同步更新** — 代码修改完成后，同步更新 `docs/CODE_WIKI.md`，保持文档与代码一致
 
 > 文档不是代码的附属品，文档是开发的指南针。
 
@@ -117,7 +117,7 @@ cargo test               # Rust 单元测试
 - **项目名称**：WNACG Downloader
 - **形态**：Tauri 2 桌面应用（Windows / macOS）
 - **技术栈**：Vue 3.5 + TypeScript 5.3 + Vite 8 | Rust 2021 + Tauri 2 + Tokio | Playwright（Node.js）
-- **详细技术文档**：[CODE_WIKI.md](CODE_WIKI.md)
+- **详细技术文档**：[docs/CODE_WIKI.md](docs/CODE_WIKI.md)
 - **设计文档目录**：[docs/](docs/)
 
 ---
@@ -163,7 +163,7 @@ cargo test               # Rust 单元测试
 | Playwright 脚本 | `scripts/` |
 | 设计与代码文档 | `docs/` |
 
-详细模块说明见 [CODE_WIKI.md](CODE_WIKI.md)。
+详细模块说明见 [docs/CODE_WIKI.md](docs/CODE_WIKI.md)。
 
 ---
 
@@ -347,11 +347,11 @@ refactor: 提取下载并发控制为独立模块
 ## 12. 开发流程
 
 1. **需求确认** → 查阅 [docs/需求规格.md](docs/需求规格.md)
-2. **架构对齐** → 参考 [docs/架构设计.md](docs/架构设计.md) 和 [CODE_WIKI.md](CODE_WIKI.md)
+2. **架构对齐** → 参考 [docs/架构设计.md](docs/架构设计.md) 和 [docs/CODE_WIKI.md](docs/CODE_WIKI.md)
 3. **界面对齐** → 参考 [docs/界面设计.md](docs/界面设计.md)
 4. **代码实现** → 遵循本文档第 2-9 节规范
 5. **测试验证** → 运行 `npm run lint && npm run build && npm test`
-6. **同步文档** → 代码变更同步更新 [CODE_WIKI.md](CODE_WIKI.md) 及相关设计文档
+6. **同步文档** → 代码变更同步更新 [docs/CODE_WIKI.md](docs/CODE_WIKI.md) 及相关设计文档
 7. **更新进度** → 阶段性进展记录到 [docs/项目进度.md](docs/项目进度.md)
 
 ---
@@ -389,7 +389,7 @@ refactor: 提取下载并发控制为独立模块
 |------|------|
 | [README.md](README.md) | 项目入口、快速开始 |
 | [AGENTS.md](AGENTS.md)（本文档） | 开发规则与规范 |
-| [CODE_WIKI.md](CODE_WIKI.md) | 代码实现文档（架构、命令、事件、配置） |
+| [docs/CODE_WIKI.md](docs/CODE_WIKI.md) | 代码实现文档（架构、命令、事件、配置） |
 | [docs/需求规格.md](docs/需求规格.md) | 功能需求与业务规则（搜索 / 下载 / AI 匹配） |
 | [docs/架构设计.md](docs/架构设计.md) | 技术架构蓝图 |
 | [docs/界面设计.md](docs/界面设计.md) | UI 布局与视觉设计 |
